@@ -1,0 +1,24 @@
+{
+    "name": "DataUtilities",
+    "rootNamespace": "",
+    "references": [
+        "GUID:e0cd26848372d4e5c891c569017e11f1",
+        "GUID:c668b7a00ffe56a498ddb1fc9f96f4e6",
+        "GUID:d8b63aba1907145bea998dd612889d6b",
+        "GUID:329b4ccd385744985bf3f83cfd77dfe7",
+        "GUID:e04e6c86a9f3947eb95fded39f9e60cc",
+        "GUID:2665a8d13d1b3f18800f46e256720795",
+        "GUID:b75d3cd3037d383a8d1e2f9a26d73d8a"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "ENABLE_UNITY_COLLECTIONS_CHECKS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
