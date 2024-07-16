@@ -15,6 +15,7 @@ namespace Runtime
     //todo this may register itself to baking
     //system together with zonegraph data
     //use shared component filter to filter by scenes
+    //make registered zoneShape an entity with data.
     public abstract class ZoneShape : MonoBehaviour//this can be authoring component
     {
         [SerializeField] private ZoneLaneProfile _zoneLaneProfile;//inject with zenject

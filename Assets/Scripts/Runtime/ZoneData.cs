@@ -7,13 +7,13 @@ namespace Runtime
 {
     public struct ZoneData
     {
-        public int BoundaryPointsBegin;
+        public int BoundaryPointsBegin;//it is only needed to build storage and later for debug
         /*One past index*/
         public int BoundaryPointsEnd;
         /*Indices range to all lanes in, can this be made differently in a buffer? */
-        public int LanesBegin;
+        public int LanesBegin;//used for queries the range in which to look for the nearest lanes
         public int LanesEnd;
-        public Bounds Bounds;
+        public MinMaxAABB Bounds;//for spacial sorting in BVTree or Grid
         //masktags
     }
 
@@ -22,7 +22,7 @@ namespace Runtime
         public float Width;
         /*Indices range to all LanePoints in storage*/
         public int PointsBegin;
-        public int PointsEnd;
+        public int PointsEnd;//blob pointer?
         public int LinksBegin;
         public int LinksEnd;
         public int ZoneIndex;
@@ -68,8 +68,8 @@ namespace Runtime
         public ZoneLaneLinkData LinkData;
     }
     
-    /*Point in a lane*/
-    [BakingType]
+    /*Point in a lane, consider using it not only as a baking type*/
+    //[BakingType]
     public struct ZoneShapePoint : IBufferElementData
     {
         public float3 Position;
@@ -77,4 +77,11 @@ namespace Runtime
         public float3 Up;
         public float3 Right;
     }
+    
+    /*what shape entity needs:
+     1. Points.
+     2. Bounds.
+     3. Lanes.
+     */
+    
 }

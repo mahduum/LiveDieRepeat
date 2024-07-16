@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using Data;
+using Unity.Collections;
+using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
 
@@ -119,12 +121,12 @@ namespace Runtime
                     var lane = storage.Lanes[i];
                     CalculateLaneProgressions(storage.LanePoints, lane.PointsBegin, lane.PointsEnd, storage.LanePointsProgressions);
                 }
-                
+
                 //Calculate bounds:
-                zone.Bounds = new Bounds();
+                zone.Bounds = new MinMaxAABB();
                 for (int i = zone.BoundaryPointsBegin; i < zone.BoundaryPointsEnd; i++)
                 {
-                    zone.Bounds.Expand(storage.BoundaryPoints[i]);
+                    zone.Bounds.Encapsulate(storage.BoundaryPoints[i]);
                 }
 
                 storage.Zones.Add(zone);
