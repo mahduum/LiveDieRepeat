@@ -1,0 +1,4 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="project://database/Assets/UI/SplineButton.uss?fileID=7433441132597879392&amp;guid=f01ea3df26e04434080f730a5fccf6d0&amp;type=3#SplineButton" />
+    <ui:Button text="Edit" parse-escape-sequences="true" display-tooltip-when-elided="true" view-data-key="TextTest" name="Button" class="button" />
+</ui:UXML>

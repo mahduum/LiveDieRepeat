@@ -13,4 +13,8 @@ MonoBehaviour:
   m_Name: LaneProfile
   m_EditorClassIdentifier: 
   _name: 
-  _lanes: []
+  _lanes:
+  - _width: 80
+    _direction: 1
+  - _width: 80
+    _direction: 2

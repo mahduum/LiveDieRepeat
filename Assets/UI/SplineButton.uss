@@ -1,0 +1,21 @@
+.button {
+    width: 300px;
+    color: aquamarine;
+    background-color: rgb(0, 0, 154);
+    transition-timing-function: ease-in-out;
+    transition-duration: 0.2s;
+}
+
+.unity-button:hover {
+    background-color: rgba(112, 6, 255, 0.96);
+    transition-property: background-color, scale;
+    transition-duration: 0.2s, 0.2s;
+    transition-timing-function: ease, ease-in-out;
+    scale: 0.8 0.8;
+}
+
+.unity-button:active {
+    transition-timing-function: ease-in-out;
+    transition-duration: 0.1s;
+    background-color: rgb(255, 204, 42);
+}

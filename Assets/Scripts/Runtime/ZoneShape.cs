@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using Data;
+using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Splines;
 
@@ -25,7 +26,7 @@ namespace Runtime
         
         public event Action<Spline> OnShapeChangedEvent;//todo for debug, to delete
 
-        public abstract Component GetDependency();
+        public abstract Component GetBakerDependency();
         
         //todo editor mode to set points provider
         //todo zone tags separate from lane tags
@@ -51,6 +52,7 @@ namespace Runtime
         }
 
         public abstract List<ZoneShapePoint>[] GetShapesAsPoints(); //todo make interface method
+        public abstract List<MinMaxAABB> GetShapesBounds();
 
         //todo we need it to provide ZoneShapePoints for tesselation
         //but it can directly return tesselated points

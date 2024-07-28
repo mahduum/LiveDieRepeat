@@ -6,31 +6,6 @@ using UnityEngine.Rendering;
 
 namespace Utilities
 {
-    /*GC version of sparse array.*/
-    public class SparseList<T>
-    {
-        private readonly List<T> _data = new();
-        //private readonly LinkedList<int>
-
-        public T this[int index]
-        {
-            get
-            {
-                if (index < _data.Count)
-                {
-                    return _data[index];
-                }
-
-                return default;
-            }
-
-            set
-            {
-                
-            }
-        }
-        
-    }
     
     //why sparse array?
     //to be able to access fast by index abd then next item is also accessed by index using next index of the first item
@@ -267,6 +242,7 @@ namespace Utilities
                 X = x;
             }
 
+            //todo make these methods static for data friendliness?
             public void LevelUp(int levelRatio)
             {
                 X = LevelUpComponent(X, levelRatio);

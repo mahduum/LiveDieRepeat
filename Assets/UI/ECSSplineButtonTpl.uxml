@@ -1,0 +1,4 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Template name="Button1" src="project://database/Assets/UI/Button1.uxml?fileID=9197481963319205126&amp;guid=ebc9598e44041da4a81296c7827df59e&amp;type=3#Button1" />
+    <ui:Instance template="Button1" name="Button1" />
+</ui:UXML>

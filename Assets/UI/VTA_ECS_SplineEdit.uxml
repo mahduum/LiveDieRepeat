@@ -1,0 +1,14 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <ui:Template name="Button1" src="project://database/Assets/UI/Button1.uxml?fileID=9197481963319205126&amp;guid=ebc9598e44041da4a81296c7827df59e&amp;type=3#Button1" />
+    <Style src="project://database/Assets/UI/SplineButton.uss?fileID=7433441132597879392&amp;guid=f01ea3df26e04434080f730a5fccf6d0&amp;type=3#SplineButton" />
+    <ui:VisualElement style="flex-grow: 1; flex-direction: column-reverse;">
+        <ui:VisualElement style="flex-grow: 1; justify-content: flex-end; max-width: 100%; max-height: 10%; opacity: 0.6; background-color: rgba(244, 253, 82, 0.35); flex-direction: row;">
+            <ui:Instance template="Button1" name="EditButton" view-data-key="EditButton" class="spline-button" style="transition-property: scale; transition-duration: 0.3s; transition-timing-function: ease-in-out-bounce; background-color: rgba(202, 24, 24, 0);">
+                <AttributeOverrides element-name="Button" view-data-key="Edit" />
+            </ui:Instance>
+            <ui:Instance template="Button1" name="SaveButton">
+                <AttributeOverrides element-name="Button" text="Save" view-data-key="Save" />
+            </ui:Instance>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

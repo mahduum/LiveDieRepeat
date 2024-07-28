@@ -1,11 +1,11 @@
 ﻿using System;
+using Data;
 using Runtime;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
-using UnityEngine.Rendering;
-using UnityEngine.Splines;
+using Utilities;
 
 namespace Authoring
 {
@@ -22,12 +22,33 @@ namespace Authoring
             {
                 var parentEntity = GetEntity(TransformUsageFlags.None);
                 
-                DependsOn(authoring._zoneShape.GetDependency());
+                DependsOn(authoring._zoneShape.GetBakerDependency());
+                DependsOn(authoring._zoneShape.GetLaneProfile());
+                DependsOn(authoring._zoneShape);
                 
                 AddBuffer<ZoneShapeChangesComponent>(parentEntity);
 
                 var shapes = authoring._zoneShape.GetShapesAsPoints();//todo make native array?
+                var shapesBounds = authoring._zoneShape.GetShapesBounds();
+                var laneProfile = authoring._zoneShape.GetLaneProfile();
 
+                var blobBuilder = new BlobBuilder(Allocator.Temp);
+                ref var laneProfileBlobAsset = ref blobBuilder.ConstructRoot<LaneProfileBlobAsset>();
+                
+                laneProfileBlobAsset.LanesTotalWidth = laneProfile.GetLanesTotalWidth();
+                
+                var laneDescArrayBuilder = blobBuilder.Allocate(
+                    ref laneProfileBlobAsset.LaneDescriptions,
+                    laneProfile._lanes.Length);
+                
+                for (int i = 0; i < laneProfile._lanes.Length; i++)
+                {
+                    var laneDesc = laneProfile._lanes[i];
+                    laneDescArrayBuilder[i] = laneDesc;
+                }
+                
+                var laneProfileBlobAssetRef =  blobBuilder.CreateBlobAssetReference<LaneProfileBlobAsset>(Allocator.Persistent);
+                
                 for (var index = 0; index < shapes.Length; index++)//check if we have data
                 {
                     var shape = shapes[index];
@@ -42,14 +63,57 @@ namespace Authoring
                         shape.ToNativeArray(Allocator.Temp)); //the contents is copied, make all temp from get shapes
                     Debug.Log("baked shape");
                     //todo the rest will be managed by the system
+                    //calculate bounds for shape and add it to component registered shape, this will be entity index
+                    AddComponent(additionalEntity, new RegisteredShapeComponent());
+                    SetComponentEnabled<RegisteredShapeComponent>(additionalEntity, true);//todo true temp for tests
+                    AddComponent(additionalEntity, new HashGrid2dBoundsComponent()
+                    {
+                        Bounds = shapesBounds[index],//these bounds are not including lane profile width, but it is enough for hash grid 2d
+                    });
+                    AddComponent(additionalEntity, new CellLocationComponent());
+                    AddComponent(additionalEntity, new LaneProfileComponent()
+                    {
+                        LaneProfile = laneProfileBlobAssetRef
+                    });
                 }
 
                 //todo how to attach changes to main entity? base system? get base system
                 //authoring adds it?
+                //we have these entities for shapes with points, they should also have their cell location?
+                //TODO!!!!!:
+                //get system with RegisteredshapeComponent disabled and use bounds to register to grid, and set cell location
+                //reference: void FZoneGraphBuilder::RegisterZoneShapeComponent(UZoneShapeComponent& ShapeComp)
+                //we can add entity to the grid or we can add component index (whatever index it has in builder
+                //NOTE: make system that will create entity hash grid and disable system, or each time the scene is baked
+                blobBuilder.Dispose();
             }
         }
     }
 
+    public struct RegisteredShapeComponent : IComponentData, IEnableableComponent//todo enableable??
+    {
+    }
+
+    public struct HashGrid2dBoundsComponent : IComponentData
+    {
+        public MinMaxAABB Bounds;
+    }
+
+    public struct CellLocationComponent : IComponentData
+    {
+        public HierarchicalHashGrid2D<Entity>.CellLocation CellLocation;
+    }
+
+    public struct LaneProfileComponent : IComponentData
+    {
+        public BlobAssetReference<LaneProfileBlobAsset> LaneProfile;
+    }
+
+    public struct LaneProfileBlobAsset
+    {
+        public float LanesTotalWidth;
+        public BlobArray<ZoneLaneDesc> LaneDescriptions;
+    }
     
     public struct ZoneShapeChangesComponent : IBufferElementData
     {

@@ -1,12 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using Unity.Entities;
+﻿using System.Collections.Generic;
+using System.Linq;
 using Unity.Mathematics;
-using Unity.VisualScripting;
 using UnityEditor.Splines;
 using UnityEngine;
 using UnityEngine.Splines;
-using Object = UnityEngine.Object;
 
 namespace Runtime
 {
@@ -16,7 +13,7 @@ namespace Runtime
     {
         [SerializeField] private SplineContainer _splineContainer;
 
-        public override Component GetDependency()
+        public override Component GetBakerDependency()
         {
             return _splineContainer;
         }
@@ -90,6 +87,20 @@ namespace Runtime
             }
 
             return curves;//cache the containers
+        }
+
+        public override List<MinMaxAABB> GetShapesBounds()
+        {
+            return _splineContainer.Splines.Select(s =>
+            {
+                var bounds = s.GetBounds();
+                MinMaxAABB mathBounds = new AABB()
+                {
+                    Center = bounds.center,
+                    Extents = bounds.extents,
+                };
+                return mathBounds;
+            }).ToList();
         }
     }
 }

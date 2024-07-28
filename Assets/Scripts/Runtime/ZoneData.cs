@@ -1,4 +1,5 @@
 ﻿using System;
+using DataUtilities;
 using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
@@ -77,6 +78,12 @@ namespace Runtime
         public float3 Up;
         public float3 Right;
     }
+
+    public class LookUpHashGrid2d : ICleanupComponentData
+    {
+        public NativeHierarchicalHashGrid2D<Entity> Grid;
+    }
+    
     
     /*what shape entity needs:
      1. Points.

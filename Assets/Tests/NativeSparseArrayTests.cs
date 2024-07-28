@@ -21,6 +21,8 @@ namespace Tests
             map.Add(1, 3);
             Assert.AreEqual(map.Count(), 2);
             Debug.Log($"Capacity: {map.Capacity}");
+            
+            //todo what means setting new value? does it look for matching element? or clears all?
 
             map.Dispose();
         }

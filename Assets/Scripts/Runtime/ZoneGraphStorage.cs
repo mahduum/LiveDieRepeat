@@ -1,24 +1,24 @@
 ﻿using System.Collections.Generic;
+using Unity.Entities;
 using Unity.Mathematics;
-using UnityEngine;
 
 namespace Runtime
 {
-    public struct ZoneGraphStorage//todo should this be a buffer? cana this be a direct mono actor?
+    public struct ZoneGraphStorage//todo make dynamic buffer version, then the storage can be entity with various component buffers
     {
-        public List<ZoneData> Zones;//look up by bvtree
-        public List<ZoneLaneData> Lanes;
-        public List<float3> BoundaryPoints;
-        public List<float3> LanePoints;
-        public List<float3> LaneUpVectors;
-        public List<float3> LaneTangentVectors;
+        public BlobArray<ZoneData> Zones;//look up by bvtree, entities? make ranges of entities, can be just an element
+        public BlobArray<ZoneLaneData> Lanes;//entities?
+        public BlobArray<float3> BoundaryPoints;//for debug drawings and calculating bounds
+        public BlobArray<float3> LanePoints;
+        public BlobArray<float3> LaneUpVectors;
+        public BlobArray<float3> LaneTangentVectors;
         /*total distance between positions, not `t, todo but maybe can be inferred from `t`?`*/
-        public List<float> LanePointsProgressions;
+        public BlobArray<float> LanePointProgressions;
         //public List<ZoneLaneLinkData> LaneLinks;
         /*All zones combined bounds*/
-        public Bounds Bounds;
+        public MinMaxAABB Bounds;
         //ZoneGraphBVTree ZoneBVTree; todo
-        public ZoneGraphDataHandle DataHandle;//for lookup by zone graph subsytem
+        //public ZoneGraphDataHandle DataHandle;//for lookup by zone graph subsytem
     }
 
     public struct ZoneGraphDataHandle
@@ -26,4 +26,6 @@ namespace Runtime
         public uint Index;
         public uint Generation;
     }
+    
+    //todo make a blob of zonegraphstorage? entity that moves may have pointer to a lane
 }

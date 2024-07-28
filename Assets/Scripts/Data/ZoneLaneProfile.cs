@@ -1,4 +1,6 @@
-﻿using UnityEngine;
+﻿using System;
+using Unity.Entities;
+using UnityEngine;
 using UnityEngine.Serialization;
 
 namespace Data
@@ -11,6 +13,8 @@ namespace Data
 
         [SerializeField] public ZoneLaneDesc[] _lanes;
 
+        public event Action OnLaneProfileUpdated;
+
         public float GetLanesTotalWidth()
         {
             float totalWidth = 0.0f;
@@ -20,6 +24,12 @@ namespace Data
             }
 
             return totalWidth;
+        }
+
+        private void OnValidate()
+        {
+            OnLaneProfileUpdated?.Invoke();
+
         }
     }
 
@@ -31,7 +41,7 @@ namespace Data
     }
     
     [System.Serializable]
-    public struct ZoneLaneDesc
+    public struct ZoneLaneDesc : IComponentData
     {
         public float _width;
 
