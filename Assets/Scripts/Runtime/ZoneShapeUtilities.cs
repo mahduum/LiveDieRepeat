@@ -26,7 +26,7 @@ namespace Runtime
             var subShapes = shape.GetShapesAsPoints();
             var totalPoints = subShapes.Sum(list => list.Count);
             var totalBoundaryPoints = totalPoints * 2;
-            var laneProfileCount = shape.GetLaneProfile()._lanes.Length;
+            var laneProfileCount = shape.GetZoneLaneProfile().GetLaneDescriptions().Length;
             var totalLanes = subShapes.Length * laneProfileCount;//subshapes * lanes in laneprofile
             var totalLanePoints = totalPoints * laneProfileCount;
 
@@ -73,7 +73,7 @@ namespace Runtime
                 
                 //Build boundary points
                 zone.BoundaryPointsBegin = currentBoundaryPointsCount;//storage.BoundaryPoints.Length;//current length
-                ZoneLaneProfile laneProfile = shape.GetLaneProfile();
+                IZoneLaneProfile laneProfile = shape.GetZoneLaneProfile();
                 float totalWidth = laneProfile.GetLanesTotalWidth();
                 float halfWidth = totalWidth * 0.5f;
                 
@@ -86,7 +86,7 @@ namespace Runtime
                 for (int i = shapePoints.Count - 1; i >= 0; i--, currentBoundaryPointsCount++)
                 {
                     ZoneShapePoint point = shapePoints[i];
-                    boundaryPointsArrayBuilder[currentBoundaryPointsCount] = (point.Position - point.Right * halfWidth);
+                    boundaryPointsArrayBuilder[currentBoundaryPointsCount] = (point.Position + point.Right * halfWidth);
                 }
 
                 zone.BoundaryPointsEnd = currentBoundaryPointsCount;//storage.BoundaryPoints.Count;//current lenght
@@ -95,9 +95,9 @@ namespace Runtime
                 zone.LanesBegin = currentLaneCount;//storage.Lanes.Count;
                 float currentWidth = 0.0f;
                 var lanePoints = new List<ZoneShapePoint>(shapePoints.Count);
-                for (int i = 0; i < laneProfile._lanes.Length; i++)
+                for (int i = 0; i < laneProfile.GetLaneDescriptions().Length; i++)
                 {
-                    ZoneLaneDesc laneDesc = laneProfile._lanes[i];
+                    ZoneLaneDesc laneDesc = laneProfile.GetLaneDescriptions()[i];
 
                     if (laneDesc._direction == ZoneLaneDirection.None)
                     {
@@ -235,10 +235,10 @@ namespace Runtime
                 boundaryPoints.Add(point.Position - point.Right * halfWidth);
             }
             
-            for (int i = shapePoints.Length - 1; i >= 0; i--)
+            for (int i = shapePoints.Length - 1; i >= 0; i--)//adding points in reverse so they follow each other
             {
                 ZoneShapePoint point = shapePoints[i];
-                boundaryPoints.Add(point.Position - point.Right * halfWidth);
+                boundaryPoints.Add(point.Position + point.Right * halfWidth);
             }
 
             zone.BoundaryPointsEnd = boundaryPoints.Length;//storage.BoundaryPoints.Count;//current lenght
@@ -276,13 +276,13 @@ namespace Runtime
                     for (int j = 0; j < shapePoints.Length; j++)
                     {
                         var shapePoint = shapePoints[j];
-                        shapePoint.Position += shapePoint.Right * laneOffset;
+                        shapePoint.Position += math.normalize(shapePoint.Right) * laneOffset;
                         lanePointsTemp.Add(shapePoint);
                     }
                 }
                 else if (laneDesc._direction == ZoneLaneDirection.Backward)
                 {
-                    for (int j = shapePoints.Length - 1; j >= 0; j--)
+                    for (int j = shapePoints.Length - 1; j >= 0; j--)//adding points in reverse so they follow each other
                     {
                         var shapePoint = shapePoints[j];
                         shapePoint.Position += shapePoint.Right * laneOffset;

@@ -1,13 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
+using Data;
 using Dreamteck.Splines;
+using DreamTeckExtensions;
 using Unity.Mathematics;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace Runtime
 {
     public class ZoneDreamteckSplineShape : ZoneShape
     {
+        [SerializeField] private DreamTeckSplineLaneProfileProvider _laneProfileProvider;
         [SerializeField] private SplineComputer _splineComputer;
         [SerializeField] private GameObject _segmentPrefab;
         //todo make channels configurable, make a middle interface that introduces the lane profile
@@ -16,7 +20,12 @@ namespace Runtime
         //add interface ILaneProfile, the shape will provide the profile, width, spacing etc. the problem is direction
         //todo make a partial class that will provide zone graph setting
         //consider adding additional data from spline mesh, within one channel there can be multiple lanes
-        //how many lanes a single channel has etc. 
+        //how many lanes a single channel has etc.
+
+        private void Awake()
+        {
+            //throw new NotImplementedException();
+        }
 
         public void OnLaneProfile()
         {
@@ -32,19 +41,19 @@ namespace Runtime
                 splineMesh.RemoveChannel(i);
             }
 
-            var profile = GetLaneProfile();
+            var profile = GetZoneLaneProfile();
             float accWidth = 0;
-            for (int i = 0; i < profile._lanes.Length; i++)
+            for (int i = 0; i < profile.GetLaneDescriptions().Length; i++)
             {
                 
                 SplineMesh.Channel channel = splineMesh.AddChannel(_segmentPrefab.GetComponent<MeshFilter>().mesh,
-                    $"lane_mesh_{profile._lanes[i]._direction.ToString()}_{i}");
+                    $"lane_mesh_{profile.GetLaneDescriptions()[i]._direction.ToString()}_{i}");
                 channel.minOffset = new Vector2(accWidth, 0);//todo should we add them on both sides?
-                accWidth += profile._lanes[i]._width;
+                accWidth += profile.GetLaneDescriptions()[i]._width;
             }
         }
         
-        public override Component GetBakerDependency()
+        public override Component GetBakerDependency()//todo should be profile provider instead?
         {
             return _splineComputer;//todo or lane profile
         }
@@ -69,10 +78,10 @@ namespace Runtime
                 var splineSample = samples[index];
                 curves.Add(new ZoneShapePoint()
                 {
-                    Position = math.transform(localToWorld, splineSample.position),
-                    Tangent = math.transform(localToWorld, splineSample.forward),
-                    Up = math.transform(localToWorld, splineSample.up),
-                    Right = math.transform(localToWorld, splineSample.right)
+                    Position = math.transform(localToWorld, splineSample.position) + new float3(0f, 0.2f, 0f),
+                    Tangent = splineSample.forward,
+                    Up = splineSample.up,
+                    Right = splineSample.right
                 });
             }
 
@@ -82,6 +91,11 @@ namespace Runtime
         public override List<MinMaxAABB> GetShapesBounds()
         {
             return new List<MinMaxAABB>(){GetShapeBounds()};
+        }
+
+        public override IZoneLaneProfile GetZoneLaneProfile()//maybe dream teck component
+        {
+            return _laneProfileProvider;
         }
 
         public MinMaxAABB GetShapeBounds()

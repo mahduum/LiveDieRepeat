@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using Data;
 using Unity.Mathematics;
 using UnityEditor.Splines;
 using UnityEngine;
@@ -11,6 +12,7 @@ namespace Runtime
     [ExecuteAlways]
     public class ZoneSplineShape : ZoneShape
     {
+        [SerializeField] private ZoneLaneProfile _zoneLaneProfile;//inject with zenject
         [SerializeField] private SplineContainer _splineContainer;
 
         public override Component GetBakerDependency()
@@ -101,6 +103,11 @@ namespace Runtime
                 };
                 return mathBounds;
             }).ToList();
+        }
+
+        public override IZoneLaneProfile GetZoneLaneProfile()
+        {
+            return _zoneLaneProfile;
         }
     }
 }

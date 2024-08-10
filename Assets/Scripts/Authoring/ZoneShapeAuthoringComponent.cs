@@ -20,17 +20,23 @@ namespace Authoring
         {
             public override void Bake(ZoneShapeAuthoringComponent authoring)
             {
+                var laneProfile = authoring._zoneShape.GetZoneLaneProfile();
+
+                if (laneProfile == null)
+                {
+                    return;
+                }
+                
                 var parentEntity = GetEntity(TransformUsageFlags.None);
                 
                 DependsOn(authoring._zoneShape.GetBakerDependency());
-                DependsOn(authoring._zoneShape.GetLaneProfile());
+                DependsOn(laneProfile.GetSourceInstance());//if get instance, underlying object
                 DependsOn(authoring._zoneShape);
                 
                 AddBuffer<ZoneShapeChangesComponent>(parentEntity);
 
                 var shapes = authoring._zoneShape.GetShapesAsPoints();//todo make native array?
                 var shapesBounds = authoring._zoneShape.GetShapesBounds();
-                var laneProfile = authoring._zoneShape.GetLaneProfile();
 
                 var blobBuilder = new BlobBuilder(Allocator.Temp);
                 ref var laneProfileBlobAsset = ref blobBuilder.ConstructRoot<LaneProfileBlobAsset>();
@@ -39,15 +45,16 @@ namespace Authoring
                 
                 var laneDescArrayBuilder = blobBuilder.Allocate(
                     ref laneProfileBlobAsset.LaneDescriptions,
-                    laneProfile._lanes.Length);
+                    laneProfile.GetLaneDescriptions().Length);
                 
-                for (int i = 0; i < laneProfile._lanes.Length; i++)
+                for (int i = 0; i < laneProfile.GetLaneDescriptions().Length; i++)
                 {
-                    var laneDesc = laneProfile._lanes[i];
+                    var laneDesc = laneProfile.GetLaneDescriptions()[i];
                     laneDescArrayBuilder[i] = laneDesc;
                 }
                 
-                var laneProfileBlobAssetRef =  blobBuilder.CreateBlobAssetReference<LaneProfileBlobAsset>(Allocator.Persistent);
+                var laneProfileBlobAssetRef = blobBuilder.CreateBlobAssetReference<LaneProfileBlobAsset>(Allocator.Persistent);
+                AddBlobAsset(ref laneProfileBlobAssetRef, out var hash);//de-duplicate for baking systems, but this way new ref needs to be created before adding to store https://docs.unity3d.com/Packages/com.unity.entities@1.0/manual/blob-assets-create.html
                 
                 for (var index = 0; index < shapes.Length; index++)//check if we have data
                 {
@@ -70,13 +77,15 @@ namespace Authoring
                     {
                         Bounds = shapesBounds[index],//these bounds are not including lane profile width, but it is enough for hash grid 2d
                     });
+                    
                     AddComponent(additionalEntity, new CellLocationComponent());
                     AddComponent(additionalEntity, new LaneProfileComponent()
                     {
                         LaneProfile = laneProfileBlobAssetRef
                     });
                 }
-
+                
+                //laneProfileBlobAssetRef.Dispose();
                 //todo how to attach changes to main entity? base system? get base system
                 //authoring adds it?
                 //we have these entities for shapes with points, they should also have their cell location?

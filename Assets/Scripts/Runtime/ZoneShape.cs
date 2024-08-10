@@ -19,7 +19,6 @@ namespace Runtime
     //make registered zoneShape an entity with data.
     public abstract class ZoneShape : MonoBehaviour//this can be authoring component
     {
-        [SerializeField] private ZoneLaneProfile _zoneLaneProfile;//inject with zenject
         [SerializeField] protected float _pointsSpacing = 0.01f;
         
         public ZoneShapeType ShapeType { get; set; }//deduce from points provider
@@ -62,8 +61,8 @@ namespace Runtime
         //
         //builder will need curve points complete with normals etc., distanced by tollerance
         //can have internal tollerance to be overriden
-        public ZoneLaneProfile GetLaneProfile() => _zoneLaneProfile;
-        
+        public abstract IZoneLaneProfile GetZoneLaneProfile();
+
         /*Autor it with points and profile, shape point should be, each entity will have a set of its points?
          it will be a blob asset for this entity? is it worth creating?*/
     }

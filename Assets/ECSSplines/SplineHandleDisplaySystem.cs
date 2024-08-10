@@ -27,13 +27,13 @@ namespace ECSSplines
                      in SystemAPI.Query<RefRO<ECSSplineHandleVisibleComponent>>().WithAll<DisableRendering>().WithChangeFilter<LocalTransform>().WithEntityAccess())
             {
                 //enable rendering, and enable spline component
-                Debug.Log("Enabling rendering");
+                //Debug.Log("Enabling rendering");
                 buff.RemoveComponent<DisableRendering>(e);
             }
 
             foreach (var (c, e) in SystemAPI.Query<RefRO<ECSSplineHandleTagComponent>>().WithNone<DisableRendering>().WithDisabled<ECSSplineHandleVisibleComponent>().WithEntityAccess())
             {
-                Debug.Log("Disabling rendering");
+                //Debug.Log("Disabling rendering");
                 //we add disable rendering once and the previous loop won't run anyway because local transform hasn't changed
                 buff.AddComponent<DisableRendering>(e);
             }

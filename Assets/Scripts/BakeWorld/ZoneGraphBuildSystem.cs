@@ -5,15 +5,16 @@ using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
 using Unity.Mathematics;
-using UnityEditor;
 using UnityEngine;
 
 namespace BakeWorld
 {
-    [WorldSystemFilter(WorldSystemFilterFlags.BakingSystem)]
+    [WorldSystemFilter(WorldSystemFilterFlags.BakingSystem)]// | WorldSystemFilterFlags.Editor)]
+    //[UpdateBefore(typeof(ZoneGraphDebugSystem))]
     public partial struct ZoneGraphBuildSystem : ISystem
     {
-
+        private BlobAssetReference<ZoneGraphStorage> _storageBlobAssetReference;
+        
         public void OnCreate(ref SystemState state)
         {
             state.RequireForUpdate<LaneProfileComponent>();
@@ -30,10 +31,10 @@ namespace BakeWorld
         public void OnUpdate(ref SystemState state)
         {
             /*todo get current scene and get zonegraph data from that scene and other entities also from that scene*/
-            ZoneGraphData zoneGraphData = SystemAPI.GetSingleton<ZoneGraphData>();
-            
             EntityQuery query = SystemAPI.QueryBuilder().WithAll<LaneProfileComponent>().Build();
             NativeArray<Entity> entities = query.ToEntityArray(state.WorldUpdateAllocator);
+            Debug.Log($"Updating zone graph data in build system, profile entities count: {entities.Length}");
+
             //todo lets register shapes to hash grid first and then build the graph with storage here
             /*TODO each of these can be singleton buffer also, there can be many buffers attached to a single entity (like ZoneGraphStorage)*/
             NativeList<float3> boundaryPoints = new NativeList<float3>(Allocator.Temp);
@@ -47,6 +48,9 @@ namespace BakeWorld
             
             Debug.Log($"Shape entities count: {entities.Length}");
             
+            //each lane profile is added to storage with its complete data per shape
+            //what entities have the same profile? we do not know it is irrelevant, but we cannot access them by profile filter
+            //because they are not entities (yet todo, better to convert to dynamic buffers?) it is only stacked data by zones 
             foreach (Entity entity in entities)//todo entities per scene only. 
             {
                 ref LaneProfileBlobAsset laneProfile = ref state.EntityManager.GetComponentData<LaneProfileComponent>(entity).LaneProfile.Value;
@@ -83,13 +87,48 @@ namespace BakeWorld
             CopyToBlobArray(lanePointProgressions, ref storage.LanePointProgressions, ref blobBuilder);
             storage.Bounds = storageBounds;
             
-            var storageBlobAssetReference = blobBuilder.CreateBlobAssetReference<ZoneGraphStorage>(Allocator.Persistent);
-            zoneGraphData.Storage = storageBlobAssetReference;
-
-            Debug.Log($"Registered boundary points storage: ({storage.BoundaryPoints.Length}), boundary points asset ref: ({storageBlobAssetReference.Value.BoundaryPoints.Length}), total lane points: ({storage.LanePoints.Length})");
+            /*
+             * todo use this:
+             * var blobAssetStore = state.World.GetExistingSystemManaged<BakingSystem>().BlobAssetStore;
+             * // Collect the BlobAssets that
+            // - haven't already been processed in this run
+            // - aren't already known to the BlobAssetStore from previous runs (if they are known, save the BlobAssetReference for later)
+            foreach (var (rawMesh, entity) in
+                     SystemAPI.Query<RefRO<RawMesh>>().WithAll<MeshBB>()
+                         .WithEntityAccess())
+            {
+                if (m_BlobAssetReferences.TryAdd(rawMesh.ValueRO.Hash, BlobAssetReference<MeshBBBlobAsset>.Null))
+                {
+                    if (blobAssetStore.TryGet<MeshBBBlobAsset>(rawMesh.ValueRO.Hash,
+                            out BlobAssetReference<MeshBBBlobAsset> blobAssetReference))
+                    {
+                        m_BlobAssetReferences[rawMesh.ValueRO.Hash] = blobAssetReference;
+                    }
+                    else
+                    {
+                        m_EntitiesToProcess.Add(entity);
+                    }
+                }
+            }
+            
+            - add some unique hash to the baked component
+             */
+            //_storageBlobAssetReference.Dispose();
+            _storageBlobAssetReference = blobBuilder.CreateBlobAssetReference<ZoneGraphStorage>(Allocator.Persistent);
+            
+            var zoneGraphData = SystemAPI.GetSingletonRW<ZoneGraphData>();
+            zoneGraphData.ValueRW.Storage = _storageBlobAssetReference;
+            
+            Debug.Log($"Registered boundary points storage: ({storage.BoundaryPoints.Length}), boundary points asset ref: ({_storageBlobAssetReference.Value.BoundaryPoints.Length}), total lane points: ({storage.LanePoints.Length})");
             blobBuilder.Dispose();
         }
-        
+
+        public void OnDestroy(ref SystemState state)
+        {
+            if (_storageBlobAssetReference.IsCreated)
+                _storageBlobAssetReference.Dispose();
+        }
+
         //todo make this extension method
         private static unsafe void CopyToBlobArray<T>(NativeList<T> source, ref BlobArray<T> destination, ref BlobBuilder blobBuilder) where T : unmanaged
         {
