@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using Data;
 using DataUtilities;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -63,10 +65,18 @@ namespace Runtime
     /* Link for a specified lane, used during building */
     public struct ZoneShapeLaneInternalLink
     {
-        /*Lane index to which the link belongs to*/
+        /*Lane index within given zone to which the link belongs to*/
         public int LaneIndex;
         /*Link details*/
         public ZoneLaneLinkData LinkData;
+    }
+
+    public class ZoneShapeLaneInternalLinkComparer : IComparer<ZoneShapeLaneInternalLink>
+    {
+        public int Compare(ZoneShapeLaneInternalLink x, ZoneShapeLaneInternalLink y)
+        {
+            return x.LaneIndex.CompareTo(y.LaneIndex);
+        }
     }
     
     /*Point in a lane, consider using it not only as a baking type*/
@@ -82,6 +92,32 @@ namespace Runtime
     public class LookUpHashGrid2d : ICleanupComponentData
     {
         public NativeHierarchicalHashGrid2D<Entity> Grid;
+    }
+
+    /*Represents a location where shapes can be connected together.
+     Belongs to array on a single ZoneShape. In Spline type only start and end point
+     are connectors, but in Polygon type each point is a connector.*/
+    public struct ZoneShapeConnector
+    {
+        /*Reference to the profile, used for compatibility comparisons (to connect to connectors their profiles must be identical.*/
+        public IZoneLaneProfile Profile;
+        public Vector3 Position;
+        public Vector3 Normal;
+        public Vector3 Up;
+        /*Point index of ZoneShape Mono, as in list returned by GetShapesAsPoints*/
+        public int PointIndex;
+        public bool IsLaneProfileReversed;
+        public ZoneShapeType ShapeType;//polygon or spline
+
+    }
+
+    /*Represents a connection between two shape connectors.
+     Is ZoneShapeComponent property, has a reference to other connected shape 
+     and index of a connector on that shape.*/
+    public struct ZoneShapeConnection
+    {
+        public WeakReference<ZoneShape> ConnectedShape;
+        public int ConnectorIndex;
     }
     
     

@@ -4,6 +4,7 @@ using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Mathematics;
 using UnityEngine.Rendering;
+using Utilities;
 
 namespace DataUtilities
 {
@@ -104,6 +105,9 @@ namespace DataUtilities
                 var hashKey = location.ToHashKey();
                 
                 _hashGridCellItems.Add(hashKey, bucketItem);
+                
+                //register this cell if we ever would need to check only items count on some finer level:
+                //...
 
                 _itemCountPerLevel[location.Level]++;
                 
@@ -120,15 +124,20 @@ namespace DataUtilities
                      The query is for all the objects in given location
                      */
                     var key = parentLocation.ToHashKey();
-                    if (_hashGridCells.TryGetValue(key, out var cell))
-                    {
-                        cell.ChildItemsCount++;
-                        _hashGridCells[key] = cell;
-                    }
-                    else
-                    {
-                        _hashGridCells[key] = new Cell(parentLocation.X, parentLocation.Y, parentLocation.Level, 1);
-                    }
+                    IncrementCellChildItemsCount(key, parentLocation);
+                }
+            }
+
+            void IncrementCellChildItemsCount(uint key, CellLocation parentLocation)
+            {
+                if (_hashGridCells.TryGetValue(key, out var cell))
+                {
+                    cell.ChildItemsCount++;
+                    _hashGridCells[key] = cell;
+                }
+                else
+                {
+                    _hashGridCells[key] = new Cell(parentLocation.X, parentLocation.Y, parentLocation.Level, 1);
                 }
             }
         }
@@ -153,6 +162,14 @@ namespace DataUtilities
                 }
             }
 
+            if (level == LevelCount)
+            {
+                //too big to fit in any of the levels, will go into spill list
+                x = 0;
+                y = 0;
+                level = -1;
+            }
+
             return new CellLocation(x, y, level);
         }
 
@@ -165,6 +182,155 @@ namespace DataUtilities
             {
                 Min = new float3(x, y, 0f),
                 Max = new float3(x + size, y + size, 0f)
+            };
+        }
+
+        /** Returns items that potentially touch the bounds. Operates on grid level, can have false positives.
+          * @param Bounds - Query bounding box.
+          * @param OutResults - Result of the query, IDs of potentially overlapping items.
+          */
+        public void Query(AABB bounds, NativeList<T> results)
+        {
+            NativeArray<CellRect> rects = new NativeArray<CellRect>(LevelCount, Allocator.Temp);
+            NativeArray<CellRectIteratorState> iterators =
+                new NativeArray<CellRectIteratorState>(LevelCount, Allocator.Temp);
+            int iteratorLevelIndex = 0;
+            
+            // Calculate cell bounds for each level, keep track of the coarsest level that has any items, we'll start from that
+            for (int level = 0; level < LevelCount; level++)
+            {
+                rects[level] = CalculateQueryBounds(bounds, level);
+            }
+            
+            // The idea of the iterator below is that it iterates over rectangle cells recursively towards finer levels, depth first.
+            // The previous level's iterator is kept in the Iters stack, and we can pop and continue that once the finer level is completed.
+            // Finer iterator rectangles is clamped against that levels tight bounds so that unnecessary cells are not visited.
+            // Coarser levels of the grid also store data if the finer levels under them has any items. This is used to skip iterating
+            // lower levels at certain locations completely. This can be big advantage in larger query boxes, compared to iterating all cells as in QuerySmall().
+
+            // Init coarsest iterator, the biggest cells, look for the largest objects first, only then check if smaller cells contain anything
+            int startLevel = LevelCount - 1;
+            var iterator = new CellRectIteratorState()
+            {
+                Level = startLevel,
+                Rect = rects[startLevel],
+                X = rects[startLevel].MinX,//todo it is in rect already, make properties?
+                Y = rects[startLevel].MinY
+            };
+
+            iterators[iteratorLevelIndex] = iterator;//initial iterator
+            iteratorLevelIndex++;
+
+            while (iteratorLevelIndex > 0)//one iterator per level
+            {
+                var levelIteratorState = iterators[iteratorLevelIndex - 1];
+                // Check if the iterator has finished
+                if (levelIteratorState.X > levelIteratorState.Rect.MaxX)//finished for X
+                {
+                    levelIteratorState.X = levelIteratorState.Rect.MinX;//reset X
+                    levelIteratorState.Y++;//get next row
+                    if (levelIteratorState.Y > levelIteratorState.Rect.MaxY)
+                    {
+                        //all rows done, that means that we are finished with this level, and
+                        //we take up again on the coarser level where we left off when proceeding to finer levels
+                        iteratorLevelIndex--;
+                        continue;
+                    }
+                }
+
+                //cell has info about total items at all levels
+                var cellLocation = new CellLocation(levelIteratorState.X, levelIteratorState.Y, levelIteratorState.Level);
+                //if we access come random hash, we don't know if there are items on other levels, so we start with cell that has register of item count per level
+                //for example we may only access a coarse level with no other items on finer levels, if we don't add a cell for it, we may not check for bucket item
+                //or we can check items first on bucket and if there none, we check for cell and see if there are any below, 
+                //first find if we have any items at this level:
+                if (_hashGridCellItems.TryGetFirstValue(cellLocation.ToHashKey(), out BucketItem bucketItem, out NativeParallelMultiHashMapIterator<uint> it))
+                {
+                    results.Add(bucketItem.Item);
+                    while (_hashGridCellItems.TryGetNextValue(out var nextBucketItem, ref it))
+                    {
+                        results.Add(nextBucketItem.Item);
+                    }
+                }
+                
+                //check if we have items at finer levels, add iterator for the next loop
+                if (FindCell(cellLocation) is {ChildItemsCount: > 0} && levelIteratorState.Level > 0)
+                {
+                    int finerLevel = levelIteratorState.Level - 1;
+                    CellRect finerRect = rects[finerLevel];
+                    int xMin = levelIteratorState.X * LevelRatio;
+                    int yMin = levelIteratorState.Y * LevelRatio;
+                    int step = LevelRatio - 1;
+                    CellRect currentRect = new CellRect(xMin, yMin, xMin + step, yMin + step);
+                    CellRect intersection = IntersectRect(currentRect, finerRect);
+
+                    if (intersection.MaxX >= intersection.MinX && intersection.MaxY >= intersection.MinY)
+                    {
+                        //set the next iterator if it is not empty
+                        iterators[iteratorLevelIndex] = new CellRectIteratorState()
+                        {
+                            Rect = intersection,
+                            X = intersection.MinX,
+                            Y = intersection.MinY,
+                            Level = finerLevel
+                        };
+                        
+                        iteratorLevelIndex++;
+                    }
+                }
+
+                //if there weren't any items at finer levels then we simply advance iterator state and stay on the same level
+                //else we raise the coarser iterator state, but we will continue with finer state until there are items
+                levelIteratorState.X++;
+            }
+            
+            //at the end include all stuff from the spill list
+            //todo add to results what spilled
+        }
+        
+        /** Returns intersection of the two cell bounding rectangles.
+          * @param Left - left hand side rectangle
+          * @param Right - right hand side rectangle
+          * @return Intersecting are between left and right.
+          */
+        CellRect IntersectRect(CellRect left, CellRect right)
+        {
+            return new CellRect()
+            {
+                MinX = math.max(left.MinX, right.MinX),
+                MinY = math.max(left.MinY, right.MinY),
+                MaxX = math.min(left.MaxX, right.MaxX),
+                MaxY = math.min(left.MaxY, right.MaxY),
+            };
+        }
+        
+        /** Returns a cell for specific location and level.
+          * @param X - Cell X coordinate.
+          * @param Y - Cell Y coordinate.
+          * @param Level - Grid Level.
+          * @return Pointer to cell at specified location, or return nullptr if the cell does not exist.
+          */
+        private Cell FindCell(CellLocation cellLocation)
+        {
+            _hashGridCells.TryGetValue(cellLocation.ToHashKey(), out var found);
+            return found;
+        }
+
+        /** Calculates cell based query rectangle. The bounds are expanded by half grid cell size because the items are stored for only one cell
+          * based on their center and side. For that reason the items can overlap the neighbor cells by half the cell size.
+          * @param Bounds - Query bounding box to quantize.
+          * @param Level - Which level of the tree the to calculate the bounds for
+          * @return Quantized rectangle representing the cell bounds at specific level of the tree, coordinates inclusive.
+          */
+        private CellRect CalculateQueryBounds(AABB bounds, int level)
+        {
+            MinMaxAABB minMaxAABB = bounds;
+            return new CellRect()
+            {
+                MinX = (int) math.floor(minMaxAABB.Min.x * _inverseCellSizesPerLevel[level] - 0.5f),
+                MinY = (int) math.floor(minMaxAABB.Min.y * _inverseCellSizesPerLevel[level] - 0.5f),
+                MaxX = (int) math.floor(minMaxAABB.Max.x * _inverseCellSizesPerLevel[level] - 0.5f),
+                MaxY = (int) math.floor(minMaxAABB.Max.y * _inverseCellSizesPerLevel[level] - 0.5f),
             };
         }
 
@@ -181,7 +347,7 @@ namespace DataUtilities
              upon adding new LinkedItem, the First is set to the index to Items assigned for this new item, while this LinkedItem.Next
              is assigned to what was previously the First (but consider it to be called "last" as we follow the list from the back
              when retrieving items in the cell.*/
-            public int First;
+            public int ItemsCount;
             public int ChildItemsCount;
 
             public Cell(int level, int y, int x, int childItemsCount = 0)
@@ -189,7 +355,7 @@ namespace DataUtilities
                 Level = level;
                 Y = y;
                 X = x;
-                First = -1;
+                ItemsCount = -1;
                 ChildItemsCount = childItemsCount;
             }
 
@@ -227,11 +393,11 @@ namespace DataUtilities
         {
             public int X, Y, Level;
             
-            public CellLocation(int level, int y, int x)
+            public CellLocation(int x, int y, int level)
             {
-                Level = level;
-                Y = y;
                 X = x;
+                Y = y;
+                Level = level;
             }
 
             public void LevelUp(int levelRatio)

@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using Authoring;
 using Data;
+using DataUtilities;
 using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.VisualScripting;
@@ -207,6 +209,7 @@ namespace Runtime
             lanePointProgressionsArrayBuilder[pointsEnd - 1] = totalDistance;
         }
         
+        /*NOTE: This seems to be shape type (polygon or bezier) agnostic because it does not perform any tesselation*/
         public static void AddShapeZoneData(
             ref LaneProfileBlobAsset laneProfile,
             in NativeArray<ZoneShapePoint> shapePoints,
@@ -217,8 +220,12 @@ namespace Runtime
             NativeList<float3> laneTangentVectors,
             NativeList<float3> laneUpVectors,
             NativeList<float> lanePointProgressions,
-            ref MinMaxAABB storageBounds)// List<ZoneShapeLaneInternalLink>/*out list*/ internalLinks/*,zone tags*/)
+            ref MinMaxAABB storageBounds, NativeList<ZoneShapeLaneInternalLink>/*out list*/ internalLinks/*,zone tags*/)
         {
+            //todo somewhere points should be adjusted for snapped connections... here or before
+            //since this only appends data, keep the corrections out of it
+            //todo reserve snapping logic for later
+            
             int zoneIndex = zones.Length;
             var zone = new ZoneData();
             //todo set zone tags
@@ -241,7 +248,7 @@ namespace Runtime
                 boundaryPoints.Add(point.Position + point.Right * halfWidth);
             }
 
-            zone.BoundaryPointsEnd = boundaryPoints.Length;//storage.BoundaryPoints.Count;//current lenght
+            zone.BoundaryPointsEnd = boundaryPoints.Length;//storage.BoundaryPoints.Count;//current length
             
             //Build lanes
             zone.LanesBegin = lanes.Length;//storage.Lanes.Count;
@@ -265,8 +272,8 @@ namespace Runtime
                 //lane.StartEntryId = firstPointId;
                 //lane.EndEntryId = endPointId;
                 var currentLaneIndex = lanes.Length;
-                
-                //todo AddAdjacentLaneLinks(currentLaneIndex, i, laneProfile._lanes, ref internalLinks);
+                //laneProfile.LaneDescriptions.
+                AddAdjacentLaneLinks(currentLaneIndex, i, ref laneProfile.LaneDescriptions, internalLinks);
 
                 float laneOffset/*offset from curve center*/ = halfWidth - (currentWidth + laneDesc._width * 0.5f);
 
@@ -351,6 +358,439 @@ namespace Runtime
                 totalDistance += math.distance(lanePoints[i], lanePoints[i + 1]);
             }
             lanePointProgressions.Add(totalDistance);
+        }
+
+        /*Links to lanes within the same zone (spline shape), that is why they are internal*/
+        public static void AddAdjacentLaneLinks(int currentLaneIndex,
+            int laneDescIndex, ref BlobArray<ZoneLaneDesc> laneDescriptions, NativeList<ZoneShapeLaneInternalLink> internalLinks)
+        {
+            var lanesCount = laneDescriptions.Length;
+            var laneDescription = laneDescriptions[laneDescIndex]; 
+            
+            // Assign left/right based on current lane direction. Lanes are later arranged so that they all point forward.
+            ZoneLaneLinkFlags previousLinkFlags = ZoneLaneLinkFlags.None;
+            ZoneLaneLinkFlags nextLinkFlags = ZoneLaneLinkFlags.None;
+
+            if (laneDescription._direction == ZoneLaneDirection.Forward)
+            {
+                nextLinkFlags = ZoneLaneLinkFlags.Left;//going to the left, so next lane will be to the left
+                previousLinkFlags = ZoneLaneLinkFlags.Right;//and previous to the right
+            }
+            else if (laneDescription._direction == ZoneLaneDirection.Backward)
+            {
+                nextLinkFlags = ZoneLaneLinkFlags.Right;//going to the left, so next lane will be to the left
+                previousLinkFlags = ZoneLaneLinkFlags.Left;//and previous to the right
+            }
+            else if (laneDescription._direction == ZoneLaneDirection.None)
+            {
+                Debug.LogError("This lane direction shouldn't be implemented!");
+            }
+            else
+            {
+                Debug.LogError("This lane direction is not implemented!");
+            }
+
+            if ((laneDescIndex + 1) < lanesCount) //next lane to the left:
+            {
+                var nextLaneDescription = laneDescriptions[laneDescIndex + 1];
+                if (nextLaneDescription._direction !=
+                    ZoneLaneDirection.None) //if it is not a simple division empty space
+                {
+                    if (laneDescription._direction != nextLaneDescription._direction)
+                    {
+                        nextLinkFlags |= ZoneLaneLinkFlags.OppositeDirection;
+                    }
+                    
+                    internalLinks.Add(new ZoneShapeLaneInternalLink
+                    {
+                        LaneIndex = currentLaneIndex,
+                        LinkData = new ZoneLaneLinkData()
+                        {
+                            DestinationLaneIndex = currentLaneIndex + 1,
+                            Type = ZoneLaneLinkType.Adjacent,
+                            Flags = nextLinkFlags
+                        }
+                    });
+                }
+            }
+
+            if ((laneDescIndex - 1) >= 0)
+            {
+                var previousLaneDescription = laneDescriptions[laneDescIndex - 1];
+                if (laneDescription._direction != previousLaneDescription._direction)
+                {
+                    previousLinkFlags |= ZoneLaneLinkFlags.OppositeDirection;
+                }
+                
+                internalLinks.Add(new ZoneShapeLaneInternalLink
+                {
+                    LaneIndex = currentLaneIndex,
+                    LinkData = new ZoneLaneLinkData()
+                    {
+                        DestinationLaneIndex = currentLaneIndex - 1,
+                        Type = ZoneLaneLinkType.Adjacent,
+                        Flags = previousLinkFlags
+                    }
+                });
+            }
+        }
+        
+        public struct LanePointID
+        {
+            public enum LaneExtremity : uint
+            {
+                Start = 0,
+                End = 1,
+            }
+            
+            public int LaneIndex;
+            public LaneExtremity Extremity;
+            
+            public LanePointID(int laneIndex, LaneExtremity extremity)
+            {
+                LaneIndex = laneIndex;
+                Extremity = extremity;
+            }
+        }
+        
+        public static void ConnectLanes(NativeList<ZoneShapeLaneInternalLink> internalLinks, ref ZoneGraphStorage storage)
+        {
+            //need zone storage for reading and writing... instead pass only arrays that will
+            //go into storage, but we will use then for data to facilitate copying:
+            //Lanes, LanePoints, lane tangent and up vectors LaneLinks to fill
+            var zoneLaneLinks = new NativeList<ZoneLaneLinkData>(Allocator.Temp);
+            internalLinks.Sort(new ZoneShapeLaneInternalLinkComparer());
+            
+            //lookup for first link by lane
+            NativeHashMap<int, int> firstLinkByLane = new NativeHashMap<int, int>(internalLinks.Length, Allocator.Temp);
+
+            int previousLaneIndex = -1;
+            for (int linkIndex = 0; linkIndex < internalLinks.Length; linkIndex++)
+            {
+                var link = internalLinks[linkIndex];
+                if (link.LaneIndex != previousLaneIndex /*take just first link*/)
+                {
+                    firstLinkByLane.Add(link.LaneIndex, linkIndex);
+                    previousLaneIndex = link.LaneIndex;
+                }
+            }
+
+            NativeHierarchicalHashGrid2D<LanePointID> linkGrid =
+                new NativeHierarchicalHashGrid2D<LanePointID>(1, 1, 10.0f);
+
+            const float connectionTolerance = 0.2f;
+            float connectionToleranceSq = math.pow(connectionTolerance, 2);
+            float3 connectionToleranceExtent =
+                new float3(connectionTolerance, connectionTolerance, connectionTolerance);
+
+            //add lanes extreme points to grid
+            for (int laneIndex = 0; laneIndex < storage.Lanes.Length; laneIndex++)
+            {
+                var zoneLaneData = storage.Lanes[laneIndex];
+                linkGrid.Add(new LanePointID(laneIndex, LanePointID.LaneExtremity.Start),
+                    new AABB()
+                    {
+                        Center = storage.LanePoints[zoneLaneData.PointsBegin],
+                        Extents = float3.zero
+                    });
+                
+                linkGrid.Add(new LanePointID(laneIndex, LanePointID.LaneExtremity.Start),
+                    new AABB()
+                    {
+                        Center = storage.LanePoints[zoneLaneData.PointsBegin],
+                        Extents = float3.zero
+                    });
+            }
+
+            //Build lane connections:
+            NativeList<LanePointID> tempQueryResults = new NativeList<LanePointID>(Allocator.Temp);
+            for (int laneIndex = 0; laneIndex < storage.Lanes.Length; laneIndex++)
+            {
+                var sourceLane = storage.Lanes[laneIndex];
+                sourceLane.LinksBegin = zoneLaneLinks.Length;
+                
+                //add internal links
+                int adjacentLaneCount = 0;
+                if (firstLinkByLane.TryGetValue(laneIndex, out var firstLink))
+                {
+                    for (int linkIndex = firstLink; linkIndex < internalLinks.Length; linkIndex++)
+                    {
+                        var link = internalLinks[linkIndex];
+                        if (link.LaneIndex != laneIndex)
+                        {
+                            break;
+                        }
+                        
+                        zoneLaneLinks.Add(link.LinkData);
+                        if (link.LinkData.Type == ZoneLaneLinkType.Adjacent)
+                        {
+                            adjacentLaneCount++;
+                        }
+                    }
+                }
+                
+                // Add links to connected lanes
+                var sourceStartPosition = storage.LanePoints[sourceLane.PointsBegin];
+                var sourceEndPosition = storage.LanePoints[sourceLane.PointsEnd - 1];
+                
+                // Lanes touching the source lane start point
+                tempQueryResults.Clear();
+                linkGrid.Query(
+                    new AABB()
+                    {
+                        Center = sourceStartPosition,
+                        Extents = connectionToleranceExtent, 
+                    },
+                    tempQueryResults);
+                
+                // all the points close enough to current lane extremity that can be liked against
+                foreach (var laneID in tempQueryResults)
+                {
+                    if (laneID.LaneIndex == laneIndex)
+                    {
+                        //skip self
+                        continue;
+                    }
+
+                    var destinationLane = storage.Lanes[laneID.LaneIndex];
+                    var destinationStartPosition = storage.LanePoints[destinationLane.PointsBegin];
+                    var destinationEndPosition = storage.LanePoints[destinationLane.PointsEnd - 1];
+
+                    bool srcLaneDataTagContainsAnyDestLaneTags = true;//todo implement tag masks and LaneConnectionMask setting
+                    if (srcLaneDataTagContainsAnyDestLaneTags)
+                    {
+                        if (sourceLane.ZoneIndex != destinationLane.ZoneIndex &&
+                            laneID.Extremity == LanePointID.LaneExtremity.End &&
+                            math.distancesq(sourceStartPosition, destinationEndPosition) < connectionToleranceSq)
+                        {
+                            // if our point is end extremity then we measure against end point position
+                            // Incoming lane, connects to start with its end and has the same direction
+                            var laneLink = new ZoneLaneLinkData()
+                            {
+                                DestinationLaneIndex = laneID.LaneIndex,
+                                Type = ZoneLaneLinkType.Incoming,
+                                Flags = ZoneLaneLinkFlags.None,
+                            };
+                            
+                            //adding to the current source lane slice section
+                            zoneLaneLinks.Add(laneLink);
+                        }
+                        else if
+                            (sourceLane.ZoneIndex ==
+                             destinationLane
+                                 .ZoneIndex /*same zone, for example splitting in polygon or adjacent in spline*/
+                             && laneID.Extremity == LanePointID.LaneExtremity.Start
+                             && math.distancesq(sourceStartPosition, destinationStartPosition) < connectionToleranceSq)
+                        {
+                            // Splitting lane
+                            var laneLink = new ZoneLaneLinkData()
+                            {
+                                DestinationLaneIndex = laneID.LaneIndex,
+                                Type = ZoneLaneLinkType.Adjacent,
+                                Flags = ZoneLaneLinkFlags.Splitting,//two starts diverging at common point
+                            };
+                            
+                            //adding to the current source lane slice section
+                            zoneLaneLinks.Add(laneLink);
+                        }
+                    }
+                }
+                
+                // Lanes touching the source lane end point
+                tempQueryResults.Clear();
+                linkGrid.Query(
+                    new AABB()
+                    {
+                        Center = sourceEndPosition,
+                        Extents = connectionToleranceExtent, 
+                    },
+                    tempQueryResults);
+                
+                // all the points close enough to current lane extremity that can be liked against
+                foreach (var laneID in tempQueryResults)
+                {
+                    if (laneID.LaneIndex == laneIndex)
+                    {
+                        //skip self
+                        continue;
+                    }
+
+                    var destinationLane = storage.Lanes[laneID.LaneIndex];
+                    var destinationStartPosition = storage.LanePoints[destinationLane.PointsBegin];
+                    var destinationEndPosition = storage.LanePoints[destinationLane.PointsEnd - 1];
+
+                    bool srcLaneDataTagContainsAnyDestLaneTags = true;//todo implement tag masks and LaneConnectionMask setting
+                    if (srcLaneDataTagContainsAnyDestLaneTags)
+                    {
+                        if (sourceLane.ZoneIndex != destinationLane.ZoneIndex &&
+                            laneID.Extremity == LanePointID.LaneExtremity.Start &&
+                            math.distancesq(sourceEndPosition, destinationStartPosition) < connectionToleranceSq)
+                        {
+                            // if our point is end extremity then we measure against end point position
+                            // Outgoing lane, connects to end with its start and has the same direction
+                            var laneLink = new ZoneLaneLinkData()
+                            {
+                                DestinationLaneIndex = laneID.LaneIndex,
+                                Type = ZoneLaneLinkType.Outgoing,
+                                Flags = ZoneLaneLinkFlags.None,
+                            };
+                            
+                            //adding to the current source lane slice section
+                            zoneLaneLinks.Add(laneLink);
+                        }
+                        else if
+                            (sourceLane.ZoneIndex ==
+                             destinationLane
+                                 .ZoneIndex /*same zone, for example splitting in polygon or adjacent in spline*/
+                             && laneID.Extremity == LanePointID.LaneExtremity.End
+                             && math.distancesq(sourceEndPosition, destinationEndPosition) < connectionToleranceSq)
+                        {
+                            // Splitting lane
+                            var laneLink = new ZoneLaneLinkData()
+                            {
+                                DestinationLaneIndex = laneID.LaneIndex,
+                                Type = ZoneLaneLinkType.Adjacent,
+                                Flags = ZoneLaneLinkFlags.Merging,//two ends coming to common point
+                            };
+                            
+                            //adding to the current source lane slice section
+                            zoneLaneLinks.Add(laneLink);
+                        }
+                    }
+                }
+                
+                // Potentially adjacent lanes in a polygon shape, we don't add adjacent links for polygon shape, or 
+                // we shouldn't add them in a way that is used for spline shapes todo: check if they can be added and debug whether adding them should be disabled in append shapes for polygons
+                if (adjacentLaneCount == 0)//it is assumed for now that polygons should have no adjacent internal links added to them in earlier code
+                {
+                    float adjacentRadius = sourceLane.Width + connectionTolerance;// assumes adjacent lanes have same width
+                    float adjacentRadiusSq = math.pow(adjacentRadius, 2f);
+                    float3 adjacentExtent = new float3(adjacentRadius, adjacentRadius, adjacentRadius);
+                    
+                    tempQueryResults.Clear();
+                    linkGrid.Query(
+                        new AABB()
+                        {
+                            Center = sourceEndPosition,
+                            Extents = adjacentExtent
+                        },
+                        tempQueryResults);
+
+                    float3 sourceStartSide /*to the left*/ = math.cross(storage.LaneTangentVectors[sourceLane.PointsBegin], storage.LaneUpVectors[sourceLane.PointsBegin]);
+                    float3 sourceEndSide /*to the left*/ = math.cross(storage.LaneTangentVectors[sourceLane.PointsEnd - 1], storage.LaneUpVectors[sourceLane.PointsEnd - 1]);
+                    
+                    //todo
+                    foreach (var laneID in tempQueryResults)
+                    {
+                        //skip self
+                        if (laneID.LaneIndex == laneIndex)
+                        {
+                            continue;
+                        }
+                        
+                        var destinationLane = storage.Lanes[laneID.LaneIndex];
+                        if (sourceLane.ZoneIndex == destinationLane.ZoneIndex
+                            &&
+                            true /*todo SourceLane.Tags.ContainsAny(DestLane.Tags & BuildSettings.LaneConnectionMask)*/)
+                        {
+                            // If the link already exists, do not create a duplicate one.
+                            bool linkExists = false;
+                            for (int linkIndex = sourceLane.LinksBegin; linkIndex < zoneLaneLinks.Length; linkIndex++)
+                            {
+                                var link = zoneLaneLinks[linkIndex];
+                                if (link.DestinationLaneIndex == laneID.LaneIndex)
+                                {
+                                    linkExists = true;
+                                    break;
+                                }
+                            }
+
+                            if (linkExists)
+                            {
+                                continue;
+                            }
+                            
+                            var destinationStartPosition = storage.LanePoints[destinationLane.PointsBegin];
+                            var destinationEndPosition = storage.LanePoints[destinationLane.PointsEnd - 1];
+                            
+                            // Using range checks since we assume that the points should not be overlapping:
+                            if (InRange(math.distancesq(sourceStartPosition, destinationStartPosition),
+                                    connectionToleranceSq, adjacentRadiusSq)
+                                && InRange(math.distancesq(sourceEndPosition, destinationEndPosition),
+                                    connectionToleranceSq, adjacentRadiusSq))
+                            {
+                                // Same direction adjacent lanes
+                                bool startIsLeft = math.dot(sourceStartSide, destinationStartPosition - sourceStartPosition) > 0.0f;
+                                bool endIsLeft = math.dot(sourceEndSide, destinationEndPosition - sourceEndPosition) > 0.0f;
+                                
+                                // Expect the adjacent lane points to be same side of the lane at start and end.
+                                if (startIsLeft == endIsLeft)
+                                {
+                                    var link = new ZoneLaneLinkData()
+                                    {
+                                        DestinationLaneIndex = laneID.LaneIndex,
+                                        Type = ZoneLaneLinkType.Adjacent,
+                                        Flags = (startIsLeft ? ZoneLaneLinkFlags.Left : ZoneLaneLinkFlags.Right)
+                                    };
+                                    
+                                    zoneLaneLinks.Add(link);
+                                }
+                            }
+                            else if (InRange(math.distancesq(sourceStartPosition, destinationEndPosition),
+                                         connectionToleranceSq, adjacentRadiusSq)
+                                     && InRange(math.distancesq(sourceEndPosition, destinationStartPosition),
+                                         connectionToleranceSq, adjacentRadiusSq))
+                            {
+                                // Opposite direction adjacent lanes
+                                bool startIsLeft = math.dot(sourceStartSide, destinationEndPosition - sourceStartPosition) > 0.0f;
+                                bool endIsLeft = math.dot(sourceEndSide, destinationStartPosition - sourceEndPosition) > 0.0f;
+                                
+                                // Expect the adjacent lane points to be same side of the lane at start and end.
+                                if (startIsLeft == endIsLeft)
+                                {
+                                    var link = new ZoneLaneLinkData()
+                                    {
+                                        DestinationLaneIndex = laneID.LaneIndex,
+                                        Type = ZoneLaneLinkType.Adjacent,
+                                        Flags = (startIsLeft ? ZoneLaneLinkFlags.Left : ZoneLaneLinkFlags.Right) | ZoneLaneLinkFlags.OppositeDirection
+                                    };
+                                    
+                                    zoneLaneLinks.Add(link);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                sourceLane.LinksEnd = zoneLaneLinks.Length;
+                
+                // when all link data is set swap the updated lane data
+                storage.Lanes[laneIndex] = sourceLane;
+            }
+
+            
+        }
+
+        public static bool InRange(float value, float min, float max)
+        {
+            return (value >= min && value <= max);
+        }
+        
+        //todo make this extension method
+        public static unsafe void CopyToBlobArray<T>(NativeList<T> source, ref BlobArray<T> destination, ref BlobBuilder blobBuilder) where T : unmanaged
+        {
+            BlobBuilderArray<T> arrayBuilder = blobBuilder.Allocate(
+                ref destination,
+                source.Length
+            );
+
+            // for (int i = 0; i < source.Length; i++)
+            // {
+            //     arrayBuilder[i] = source[i];
+            // }
+            void* destinationPtr = arrayBuilder.GetUnsafePtr();
+            void* sourcePtr = source.GetUnsafePtr();
+            UnsafeUtility.MemCpy(destinationPtr, sourcePtr, source.Length * UnsafeUtility.SizeOf<T>());
         }
     }
 }

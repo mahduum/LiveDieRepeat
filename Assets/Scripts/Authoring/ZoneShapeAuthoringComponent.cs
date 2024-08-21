@@ -20,6 +20,8 @@ namespace Authoring
         {
             public override void Bake(ZoneShapeAuthoringComponent authoring)
             {
+                authoring._zoneShape.UpdateRelatedData();
+                
                 var laneProfile = authoring._zoneShape.GetZoneLaneProfile();
 
                 if (laneProfile == null)

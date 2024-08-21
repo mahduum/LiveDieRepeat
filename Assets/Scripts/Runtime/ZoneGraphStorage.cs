@@ -14,7 +14,7 @@ namespace Runtime
         public BlobArray<float3> LaneTangentVectors;
         /*total distance between positions, not `t, todo but maybe can be inferred from `t`?`*/
         public BlobArray<float> LanePointProgressions;
-        //public List<ZoneLaneLinkData> LaneLinks;
+        public BlobArray<ZoneLaneLinkData> LaneLinks;
         /*All zones combined bounds*/
         public MinMaxAABB Bounds;
         //ZoneGraphBVTree ZoneBVTree; todo

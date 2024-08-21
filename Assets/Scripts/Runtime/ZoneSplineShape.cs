@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using Data;
 using Unity.Mathematics;
@@ -15,12 +16,14 @@ namespace Runtime
         [SerializeField] private ZoneLaneProfile _zoneLaneProfile;//inject with zenject
         [SerializeField] private SplineContainer _splineContainer;
 
+        public override ZoneShapeType ShapeType => ZoneShapeType.Spline;
+
         public override Component GetBakerDependency()
         {
             return _splineContainer;
         }
 
-        void OnEnable()
+        protected override void SubscribeOnShapeChanged()
         {
 #if UNITY_EDITOR
             EditorSplineUtility.AfterSplineWasModified += OnShapeChanged;
@@ -30,8 +33,8 @@ namespace Runtime
             Spline.Changed += OnSplineChanged;
 #endif
         }
-        
-        void OnDisable()
+
+        protected override void UnsubscribeOnShapeChanged()
         {
 #if UNITY_EDITOR
             EditorSplineUtility.AfterSplineWasModified -= OnShapeChanged;
@@ -47,11 +50,13 @@ namespace Runtime
         {
             //will have entity it belongs to 
             //spline.data
+            OnShapeChanged();
         }
         
         private void OnShapeChanged(Spline spline)
         {
             Debug.Log($"Spline changed! Id: {spline.GetHashCode()}");//use int data to find entity
+            OnShapeChanged();
         }
 
         //what I need from spline: to be able to set data

@@ -21,41 +21,24 @@ namespace Runtime
         //todo make a partial class that will provide zone graph setting
         //consider adding additional data from spline mesh, within one channel there can be multiple lanes
         //how many lanes a single channel has etc.
-
-        private void Awake()
-        {
-            //throw new NotImplementedException();
-        }
-
-        public void OnLaneProfile()
-        {
-            var splineMesh = _splineComputer.GetComponent<SplineMesh>();
-            if (splineMesh == null)
-            {
-                return;
-            }
-            //todo for a given tag in profile assign a specific mesh and choose from those
-            var channelCount = splineMesh.GetChannelCount();
-            for (int i = 0; i < channelCount; i++)
-            {
-                splineMesh.RemoveChannel(i);
-            }
-
-            var profile = GetZoneLaneProfile();
-            float accWidth = 0;
-            for (int i = 0; i < profile.GetLaneDescriptions().Length; i++)
-            {
-                
-                SplineMesh.Channel channel = splineMesh.AddChannel(_segmentPrefab.GetComponent<MeshFilter>().mesh,
-                    $"lane_mesh_{profile.GetLaneDescriptions()[i]._direction.ToString()}_{i}");
-                channel.minOffset = new Vector2(accWidth, 0);//todo should we add them on both sides?
-                accWidth += profile.GetLaneDescriptions()[i]._width;
-            }
-        }
         
+        //todo optionally update shape other relative data, have OnShapeUpdated, for example profile width etc.
+
+        public override ZoneShapeType ShapeType => ZoneShapeType.Spline;
+
         public override Component GetBakerDependency()//todo should be profile provider instead?
         {
             return _splineComputer;//todo or lane profile
+        }
+
+        protected override void SubscribeOnShapeChanged()
+        {
+            _splineComputer.onRebuild += OnShapeChanged;
+        }
+
+        protected override void UnsubscribeOnShapeChanged()
+        {
+            _splineComputer.onRebuild -= OnShapeChanged;
         }
 
         public override List<ZoneShapePoint>[] GetShapesAsPoints()

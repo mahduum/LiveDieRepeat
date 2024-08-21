@@ -45,6 +45,8 @@ namespace BakeWorld
             NativeList<float3> laneUpVectors = new NativeList<float3>(Allocator.Temp);
             NativeList<float> lanePointProgressions = new NativeList<float>(Allocator.Temp);
             MinMaxAABB storageBounds = new MinMaxAABB();
+            NativeList<ZoneShapeLaneInternalLink> internalLinks =
+                new NativeList<ZoneShapeLaneInternalLink>(Allocator.Temp);
             
             Debug.Log($"Shape entities count: {entities.Length}");
             
@@ -65,11 +67,12 @@ namespace BakeWorld
                     laneTangentVectors,
                     laneUpVectors,
                     lanePointProgressions,
-                    ref storageBounds
+                    ref storageBounds,
+                    internalLinks
                     );
             }
             
-            //todo ConnectLanes(InternalLinks, OutZoneStorage);
+            //todo ConnectLanes(InternalLinks, OutZoneStorage);//uses hash grid to create links (zone link data etc. between lanes)
                 
             //todo: ConnectLanes(), add connectors to hash grid
                 
@@ -78,14 +81,17 @@ namespace BakeWorld
             BlobBuilder blobBuilder = new BlobBuilder(Allocator.Temp);
             ref ZoneGraphStorage storage = ref blobBuilder.ConstructRoot<ZoneGraphStorage>();
 
-            CopyToBlobArray(boundaryPoints, ref storage.BoundaryPoints, ref blobBuilder);
-            CopyToBlobArray(zones, ref storage.Zones, ref blobBuilder);
-            CopyToBlobArray(lanes, ref storage.Lanes, ref blobBuilder);
-            CopyToBlobArray(lanePoints, ref storage.LanePoints, ref blobBuilder);
-            CopyToBlobArray(laneTangentVectors, ref storage.LaneTangentVectors, ref blobBuilder);
-            CopyToBlobArray(laneUpVectors, ref storage.LaneUpVectors, ref blobBuilder);
-            CopyToBlobArray(lanePointProgressions, ref storage.LanePointProgressions, ref blobBuilder);
+            ZoneShapeUtilities.CopyToBlobArray(boundaryPoints, ref storage.BoundaryPoints, ref blobBuilder);
+            ZoneShapeUtilities.CopyToBlobArray(zones, ref storage.Zones, ref blobBuilder);
+            ZoneShapeUtilities.CopyToBlobArray(lanes, ref storage.Lanes, ref blobBuilder);
+            ZoneShapeUtilities.CopyToBlobArray(lanePoints, ref storage.LanePoints, ref blobBuilder);
+            ZoneShapeUtilities.CopyToBlobArray(laneTangentVectors, ref storage.LaneTangentVectors, ref blobBuilder);
+            ZoneShapeUtilities.CopyToBlobArray(laneUpVectors, ref storage.LaneUpVectors, ref blobBuilder);
+            ZoneShapeUtilities.CopyToBlobArray(lanePointProgressions, ref storage.LanePointProgressions, ref blobBuilder);
             storage.Bounds = storageBounds;
+            
+            //todo COPY INTERNAL LINKS!
+            ZoneShapeUtilities.ConnectLanes(internalLinks, ref storage);
             
             /*
              * todo use this:
@@ -128,23 +134,7 @@ namespace BakeWorld
             if (_storageBlobAssetReference.IsCreated)
                 _storageBlobAssetReference.Dispose();
         }
-
-        //todo make this extension method
-        private static unsafe void CopyToBlobArray<T>(NativeList<T> source, ref BlobArray<T> destination, ref BlobBuilder blobBuilder) where T : unmanaged
-        {
-            BlobBuilderArray<T> arrayBuilder = blobBuilder.Allocate(
-                ref destination,
-                source.Length
-            );
-
-            // for (int i = 0; i < source.Length; i++)
-            // {
-            //     arrayBuilder[i] = source[i];
-            // }
-            void* destinationPtr = arrayBuilder.GetUnsafePtr();
-            void* sourcePtr = source.GetUnsafePtr();
-            UnsafeUtility.MemCpy(destinationPtr, sourcePtr, source.Length * UnsafeUtility.SizeOf<T>());
-        }
+        
         //private //todo to hash grid registration. 
         //NOTE: registered component has its cell location!
         //todo for now only one data object
