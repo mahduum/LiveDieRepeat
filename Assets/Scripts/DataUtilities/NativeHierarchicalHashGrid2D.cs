@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Mathematics;
+using UnityEngine;
 using UnityEngine.Rendering;
 using Utilities;
 
@@ -66,6 +67,16 @@ namespace DataUtilities
                 _inverseCellSizesPerLevel[i] = 1.0f / currentCellSize;
                 currentCellSize *= LevelRatio;
             }
+        }
+
+        public int AllItemsCount()
+        {
+            var count = 0;
+            for (int i = 0; i < LevelCount; i++)
+            {
+                count += _itemCountPerLevel[i];
+            }
+            return count;
         }
 
         public void Reset()
@@ -185,6 +196,7 @@ namespace DataUtilities
             };
         }
 
+       
         /** Returns items that potentially touch the bounds. Operates on grid level, can have false positives.
           * @param Bounds - Query bounding box.
           * @param OutResults - Result of the query, IDs of potentially overlapping items.
@@ -221,14 +233,19 @@ namespace DataUtilities
             iterators[iteratorLevelIndex] = iterator;//initial iterator
             iteratorLevelIndex++;
 
-            while (iteratorLevelIndex > 0)//one iterator per level
+            int safeGuardCounter = 0;
+            
+            while (iteratorLevelIndex > 0 && safeGuardCounter++ < 100)//one iterator per level todo must be higher but then will be empty...
             {
                 var levelIteratorState = iterators[iteratorLevelIndex - 1];
+                Debug.Log($"Loop start: iterator level index: {iteratorLevelIndex}, iterator state X: {levelIteratorState.X}, Y: {levelIteratorState.Y}, guard count: {safeGuardCounter}");
+
                 // Check if the iterator has finished
                 if (levelIteratorState.X > levelIteratorState.Rect.MaxX)//finished for X
                 {
                     levelIteratorState.X = levelIteratorState.Rect.MinX;//reset X
                     levelIteratorState.Y++;//get next row
+                    iterators[iteratorLevelIndex - 1] = levelIteratorState;
                     if (levelIteratorState.Y > levelIteratorState.Rect.MaxY)
                     {
                         //all rows done, that means that we are finished with this level, and
@@ -282,6 +299,7 @@ namespace DataUtilities
                 //if there weren't any items at finer levels then we simply advance iterator state and stay on the same level
                 //else we raise the coarser iterator state, but we will continue with finer state until there are items
                 levelIteratorState.X++;
+                iterators[iteratorLevelIndex - 1] = levelIteratorState;
             }
             
             //at the end include all stuff from the spill list

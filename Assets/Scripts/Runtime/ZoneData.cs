@@ -104,7 +104,8 @@ namespace Runtime
         public Vector3 Position;
         public Vector3 Normal;
         public Vector3 Up;
-        /*Point index of ZoneShape Mono, as in list returned by GetShapesAsPoints*/
+        /*Point index of ZoneShape Mono, as in list returned by GetShapesAsPoints, is needed only to access shape points
+         in editor for blending the connections (lookup Unreal ZoneShapeComponent class)*/
         public int PointIndex;
         public bool IsLaneProfileReversed;
         public ZoneShapeType ShapeType;//polygon or spline
@@ -117,6 +118,7 @@ namespace Runtime
     public struct ZoneShapeConnection
     {
         public WeakReference<ZoneShape> ConnectedShape;
+        /*Connector index at the connected shape*/
         public int ConnectorIndex;
     }
     

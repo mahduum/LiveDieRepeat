@@ -2,6 +2,7 @@
 using Data;
 using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.Splines;
 
 namespace Runtime
 {
@@ -36,7 +37,11 @@ namespace Runtime
          *  
 
          */
+        [SerializeField] private ZoneLaneProfile _zoneLaneProfile;//inject with zenject
+        [SerializeField] private SplineContainer _splineContainer;//multiple splines, a spline for each connection, todo make them procedural for example dubin's path
+        
         public override ZoneShapeType ShapeType => ZoneShapeType.Polygon;
+        
         public override Component GetBakerDependency()
         {
             throw new System.NotImplementedException();

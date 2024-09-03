@@ -57,7 +57,10 @@ namespace BakeWorld
             {
                 ref LaneProfileBlobAsset laneProfile = ref state.EntityManager.GetComponentData<LaneProfileComponent>(entity).LaneProfile.Value;
                 NativeArray<ZoneShapePoint> points = state.EntityManager.GetBuffer<ZoneShapePoint>(entity).ToNativeArray(Allocator.Temp);
+                ZoneShapeType shapeType =
+                    state.EntityManager.GetComponentData<RegisteredShapeComponent>(entity).ShapeType;
                 ZoneShapeUtilities.AddShapeZoneData(
+                    shapeType,
                     ref laneProfile,
                     points,
                     boundaryPoints,
@@ -71,12 +74,18 @@ namespace BakeWorld
                     internalLinks
                     );
             }
+
+            var laneLinks =
+                ZoneShapeUtilities.ConnectLanes(internalLinks, lanes, lanePoints, laneTangentVectors, laneUpVectors);
             
             //todo ConnectLanes(InternalLinks, OutZoneStorage);//uses hash grid to create links (zone link data etc. between lanes)
                 
             //todo: ConnectLanes(), add connectors to hash grid
                 
             //todo build storage BVTree Blob asset Pointer?
+            
+            //todo COPY INTERNAL LINKS!
+            //todo add change lane mechanics for speeding
             
             BlobBuilder blobBuilder = new BlobBuilder(Allocator.Temp);
             ref ZoneGraphStorage storage = ref blobBuilder.ConstructRoot<ZoneGraphStorage>();
@@ -88,10 +97,12 @@ namespace BakeWorld
             ZoneShapeUtilities.CopyToBlobArray(laneTangentVectors, ref storage.LaneTangentVectors, ref blobBuilder);
             ZoneShapeUtilities.CopyToBlobArray(laneUpVectors, ref storage.LaneUpVectors, ref blobBuilder);
             ZoneShapeUtilities.CopyToBlobArray(lanePointProgressions, ref storage.LanePointProgressions, ref blobBuilder);
+            
+            ZoneShapeUtilities.CopyToBlobArray(laneLinks, ref storage.LaneLinks, ref blobBuilder);
+            
             storage.Bounds = storageBounds;
             
-            //todo COPY INTERNAL LINKS!
-            ZoneShapeUtilities.ConnectLanes(internalLinks, ref storage);
+            //todo make few links for debug
             
             /*
              * todo use this:

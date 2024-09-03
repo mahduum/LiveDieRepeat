@@ -51,6 +51,7 @@ namespace BakeWorld
             ref var allLanePoints = ref zoneGraphData.Storage.Value.LanePoints;
             ref var allLaneTangents = ref zoneGraphData.Storage.Value.LaneTangentVectors;
             ref var allLaneUps = ref zoneGraphData.Storage.Value.LaneUpVectors;
+            ref var lanes = ref zoneGraphData.Storage.Value.Lanes;
 
             if (allLaneTangents.Length != allLanePointsLength || allLaneUps.Length != allLanePointsLength)
             {
@@ -86,6 +87,27 @@ namespace BakeWorld
             var start = boundaryPoints[0];
             var end = boundaryPoints[boundaryPointsLength - 1];
             Debug.DrawLine(start, end, Color.cyan, 10);
+
+            ref var laneLinks = ref zoneGraphData.Storage.Value.LaneLinks;
+            Debug.Log($"All lane links count: {laneLinks.Length}");
+
+            for (int i = 0; i < laneLinks.Length; i++)
+            {
+                var linkData = laneLinks[i];
+                Debug.Log($"Destination lane index for current lane link index ({i}): ({linkData.DestinationLaneIndex})");
+                var destinationLaneIndex = linkData.DestinationLaneIndex;
+                if (destinationLaneIndex >= 0 && destinationLaneIndex < laneLinks.Length)
+                {
+                    var destinationLaneLink = laneLinks[destinationLaneIndex];
+                    Debug.Log($"Lane link index from destination lane link index ({destinationLaneIndex}): ({destinationLaneLink.DestinationLaneIndex})");
+
+                }
+                else
+                {
+                    Debug.LogError($"Lane link index out of bounds. No matching link!");
+                }
+
+            }
 
         }
 

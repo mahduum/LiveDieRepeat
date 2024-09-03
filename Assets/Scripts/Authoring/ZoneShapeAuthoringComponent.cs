@@ -73,7 +73,10 @@ namespace Authoring
                     Debug.Log("baked shape");
                     //todo the rest will be managed by the system
                     //calculate bounds for shape and add it to component registered shape, this will be entity index
-                    AddComponent(additionalEntity, new RegisteredShapeComponent());
+                    AddComponent(additionalEntity, new RegisteredShapeComponent()
+                    {
+                        ShapeType = authoring._zoneShape.ShapeType
+                    });
                     SetComponentEnabled<RegisteredShapeComponent>(additionalEntity, true);//todo true temp for tests
                     AddComponent(additionalEntity, new HashGrid2dBoundsComponent()
                     {
@@ -103,6 +106,7 @@ namespace Authoring
 
     public struct RegisteredShapeComponent : IComponentData, IEnableableComponent//todo enableable??
     {
+        public ZoneShapeType ShapeType;
     }
 
     public struct HashGrid2dBoundsComponent : IComponentData

@@ -99,12 +99,86 @@ namespace Runtime
         
         private void UpdateConnectors()
         {
+            _shapeConnectors.Clear();
+            var shapes = GetShapesAsPoints();
+
             //for each sub shape, separate list
+            // if (ShapeType == ZoneShapeType.Spline)
+            // {
+                int offset = 0;
+                foreach (var zoneShapePoints in shapes)
+                {
+                    if (zoneShapePoints.Count < 2)
+                    {
+                        continue;
+                    }
+
+                    //set start connector and end connector
+                    var startShapeConnector = new ZoneShapeConnector()
+                    {
+                        ShapeType = ZoneShapeType.Spline,
+                        Position = zoneShapePoints[0].Position,
+                        Normal = -zoneShapePoints[0].Tangent, //always point away from shape
+                        Up = zoneShapePoints[0].Up,
+                        //splines will only have one shape so we can point to the first or last index,
+                        //polygons for now will have multiple splines that connect lanes from other shapes,
+                        //therefore polygon should keep all the splines as one, or just their border points
+                        //we need point index just to blend the connections in editor (not supported for now, todo)
+                        PointIndex = offset + 0,
+                        IsLaneProfileReversed = false, //todo
+                        Profile = GetZoneLaneProfile()
+                    };
+
+                    _shapeConnectors.Add(startShapeConnector);
+
+                    var endShapeConnector = new ZoneShapeConnector()
+                    {
+                        ShapeType = ZoneShapeType.Spline,
+                        Position = zoneShapePoints[^1].Position,
+                        Normal = zoneShapePoints[^1].Tangent, //always point away from shape
+                        Up = zoneShapePoints[^1].Up,
+                        PointIndex = offset + zoneShapePoints.Count - 1,
+                        IsLaneProfileReversed = false, //todo
+                        Profile = GetZoneLaneProfile()
+                    };
+
+                    _shapeConnectors.Add(endShapeConnector);
+
+                    offset += zoneShapePoints.Count;
+                }
+            // }
+            // else if (ShapeType == ZoneShapeType.Polygon)
+            // {
+            //     foreach (var zoneShapePoints in shapes)
+            //     {
+            //         if (zoneShapePoints.Count < 2)
+            //         {
+            //             continue;
+            //         }
+            //         
+            //         //for polygons create a connector for each lane segment point if 
+            //         //the lanes are generated procedurally, otherwise that the first and 
+            //         //last one for each connecting shape, for now we iterate the same way like in splines
+            //         //connecting points will have point type of LaneProfile (as opposed to sharp, bezier or auto bezier)
+            //
+            //         for (var i = 0; i < zoneShapePoints.Count; i++)
+            //         {
+            //             var point = zoneShapePoints[i];
+            //             //todo polygon should not have fixed directions?
+            //             //we need to go around polygon with the indicies
+            //         }
+            //     }
+            // }
         }
 
         private void UpdateConnections()
         {
             //for each sub shape
+            _shapeConnections.Clear();
+            //find connected shapes with builder, must have access to builder hash grid where all registered shapes are for shapes lookup
+            //only hash grid is necessary for this, after the connectors are updated, then the system that localizes the connections should run
+            //find overlapping shapes and retrieve the connectors from those shapes
+            
         }
 
         private void UpdateConnectedShapes()
