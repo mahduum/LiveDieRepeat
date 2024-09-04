@@ -5,6 +5,7 @@ using Unity.Burst;
 using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
+using Random = Unity.Mathematics.Random;
 
 namespace BakeWorld
 {
@@ -33,12 +34,6 @@ namespace BakeWorld
                     var previous = shapes[index - 1];
                     var current = shapes[index];
                     Debug.DrawLine(previous.Position, current.Position, Color.magenta, 10); //todo use lane profiles or other buffer
-                    // var arrowDashDirRight = math.mul(quaternion.AxisAngle(current.Up, 0.785f), current.Right);
-                    // var arrowRightArmEnd = current.Position + arrowDashDirRight;
-                    // var arrowDashDirLeft = math.mul(quaternion.AxisAngle(current.Up, 2.355f), current.Right);
-                    // var arrowLeftArmEnd = current.Position + arrowDashDirLeft;
-                    // Debug.DrawLine(current.Position, arrowRightArmEnd, Color.green, 10);
-                    // Debug.DrawLine(current.Position, arrowLeftArmEnd, Color.green, 10);
                 }
             }
             //todo configure lane profile, on bake retrieve the data
@@ -52,6 +47,8 @@ namespace BakeWorld
             ref var allLaneTangents = ref zoneGraphData.Storage.Value.LaneTangentVectors;
             ref var allLaneUps = ref zoneGraphData.Storage.Value.LaneUpVectors;
             ref var lanes = ref zoneGraphData.Storage.Value.Lanes;
+            ref var laneLinks = ref zoneGraphData.Storage.Value.LaneLinks;
+            Debug.Log($"All lane links count: {laneLinks.Length}");
 
             if (allLaneTangents.Length != allLanePointsLength || allLaneUps.Length != allLanePointsLength)
             {
@@ -59,18 +56,47 @@ namespace BakeWorld
             }
             
             if (allLanePointsLength < 1) return;
-            for (int i = 1; i < allLanePointsLength; i++)//todo will get better drawing if drawing per lane, then lanes won't be connected and arrows will be inside bounds
+
+            Random random = new Random();
+            random.InitState((uint)allLanePoints.Length);
+            
+            for (int i = 0; i < lanes.Length; i++)
             {
-                var previous = allLanePoints[i - 1];
-                var current = allLanePoints[i];
-                var randomColor = new Color(Rand.value, Rand.value, Rand.value);
-                Debug.DrawLine(previous, current, randomColor, 10);
-                var up = allLaneUps[i];
-                var forward = allLaneTangents[i];
-                var rightArrowArmDir = math.mul(quaternion.AxisAngle(up, math.radians(135f)), forward);
-                Debug.DrawLine(current, rightArrowArmDir + current, randomColor, 10);//todo scale arrow
-                var leftArrowArmDir = math.mul(quaternion.AxisAngle(up, math.radians(225f)), forward);
-                Debug.DrawLine(current, leftArrowArmDir + current, randomColor, 10);//todo scale arrow
+                var currentLane = lanes[i];
+                if (currentLane.PointsEnd - currentLane.PointsBegin < 2)
+                {
+                    continue;
+                }
+                
+                var laneColor= new Color(random.NextFloat(0, 1), random.NextFloat(0, 1), random.NextFloat(0, 1));
+                
+                for (int j = currentLane.PointsBegin + 1; j < currentLane.PointsEnd; j++)
+                {
+                    var previous = allLanePoints[j - 1];
+                    var current = allLanePoints[j];
+                    
+                    var up = allLaneUps[j];
+                    var forward = allLaneTangents[j];
+                    DrawDebugArrow(previous, current, up, forward, laneColor);
+                }
+
+                if (currentLane.LinksEnd - currentLane.LinksBegin < 1)
+                {
+                    continue;
+                }
+                
+                for (int j = currentLane.LinksBegin; j < currentLane.LinksEnd; j++)
+                {
+                    var linkData = laneLinks[j];
+                    if ((linkData.Type & (ZoneLaneLinkType.Incoming | ZoneLaneLinkType.Outgoing)) == 0)
+                    {
+                       continue; 
+                    }
+                    
+                    Debug.Log($"Lane index ({i}) links to destination lane: ({linkData.DestinationLaneIndex}), link type: ({(int)linkData.Type})");
+                }
+                
+                //draw and debug links
             }
 
             ref var boundaryPoints = ref zoneGraphData.Storage.Value.BoundaryPoints;
@@ -88,27 +114,33 @@ namespace BakeWorld
             var end = boundaryPoints[boundaryPointsLength - 1];
             Debug.DrawLine(start, end, Color.cyan, 10);
 
-            ref var laneLinks = ref zoneGraphData.Storage.Value.LaneLinks;
-            Debug.Log($"All lane links count: {laneLinks.Length}");
+            // for (int i = 0; i < laneLinks.Length; i++)
+            // {
+            //     var linkData = laneLinks[i];
+            //     Debug.Log($"Destination lane index for current lane link index ({i}): ({linkData.DestinationLaneIndex})");
+            //     var destinationLaneIndex = linkData.DestinationLaneIndex;
+            //     if (destinationLaneIndex >= 0 && destinationLaneIndex < laneLinks.Length)
+            //     {
+            //         var destinationLaneLink = laneLinks[destinationLaneIndex];
+            //         Debug.Log($"Lane link index from destination lane link index ({destinationLaneIndex}): ({destinationLaneLink.DestinationLaneIndex})");
+            //
+            //     }
+            //     else
+            //     {
+            //         Debug.LogError($"Lane link index out of bounds. No matching link!");
+            //     }
+            //
+            // }
 
-            for (int i = 0; i < laneLinks.Length; i++)
-            {
-                var linkData = laneLinks[i];
-                Debug.Log($"Destination lane index for current lane link index ({i}): ({linkData.DestinationLaneIndex})");
-                var destinationLaneIndex = linkData.DestinationLaneIndex;
-                if (destinationLaneIndex >= 0 && destinationLaneIndex < laneLinks.Length)
-                {
-                    var destinationLaneLink = laneLinks[destinationLaneIndex];
-                    Debug.Log($"Lane link index from destination lane link index ({destinationLaneIndex}): ({destinationLaneLink.DestinationLaneIndex})");
+        }
 
-                }
-                else
-                {
-                    Debug.LogError($"Lane link index out of bounds. No matching link!");
-                }
-
-            }
-
+        private static void DrawDebugArrow(float3 from, float3 to, float3 up, float3 forward, Color color)
+        {
+            Debug.DrawLine(from, to, color, 10);
+            var rightArrowArmDir = math.mul(quaternion.AxisAngle(up, math.radians(135f)), forward);
+            Debug.DrawLine(to, rightArrowArmDir + to, color, 10);//todo scale arrow
+            var leftArrowArmDir = math.mul(quaternion.AxisAngle(up, math.radians(225f)), forward);
+            Debug.DrawLine(to, leftArrowArmDir + to, color, 10);//todo scale arrow
         }
 
         [BurstCompile]
