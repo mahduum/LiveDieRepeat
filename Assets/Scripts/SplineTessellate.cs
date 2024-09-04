@@ -9,6 +9,7 @@ using UnityEditor.Rendering;
 using UnityEngine;
 using UnityEngine.Splines;
 using UnityEngine.UIElements;
+using Runtime.ZoneGraphData;
 
 public class SplineTessellate : MonoBehaviour
 {

@@ -5,6 +5,7 @@ using Dreamteck.Splines;
 using DreamTeckExtensions;
 using Unity.Mathematics;
 using UnityEngine;
+using Runtime.ZoneGraphData;
 using Object = UnityEngine.Object;
 
 namespace Runtime

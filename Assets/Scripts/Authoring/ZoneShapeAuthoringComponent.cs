@@ -1,6 +1,7 @@
 ﻿using System;
 using Data;
 using Runtime;
+using Runtime.ZoneGraphData;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;

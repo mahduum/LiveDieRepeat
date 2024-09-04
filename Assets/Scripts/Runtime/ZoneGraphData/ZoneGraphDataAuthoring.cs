@@ -1,7 +1,7 @@
 ﻿using Unity.Entities;
 using UnityEngine;
 
-namespace Runtime
+namespace Runtime.ZoneGraphData
 {
     /*will create entity that will then get processed by the builder system*/
     public class ZoneGraphDataAuthoring : MonoBehaviour//authoring?//todo systemBase for global large data

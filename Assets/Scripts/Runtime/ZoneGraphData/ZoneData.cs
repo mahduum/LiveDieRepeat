@@ -6,7 +6,7 @@ using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
 
-namespace Runtime
+namespace Runtime.ZoneGraphData
 {
     public struct ZoneData
     {

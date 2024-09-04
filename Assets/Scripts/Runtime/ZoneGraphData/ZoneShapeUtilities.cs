@@ -11,7 +11,7 @@ using Unity.Mathematics;
 using Unity.VisualScripting;
 using UnityEngine;
 
-namespace Runtime
+namespace Runtime.ZoneGraphData
 {
     public static class ZoneShapeUtilities
     {

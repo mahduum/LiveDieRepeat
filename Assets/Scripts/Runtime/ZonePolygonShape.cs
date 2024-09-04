@@ -3,6 +3,7 @@ using Data;
 using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Splines;
+using Runtime.ZoneGraphData;
 
 namespace Runtime
 {

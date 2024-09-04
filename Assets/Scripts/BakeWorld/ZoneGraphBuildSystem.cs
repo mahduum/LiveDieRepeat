@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using Authoring;
 using Runtime;
+using Runtime.ZoneGraphData;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;

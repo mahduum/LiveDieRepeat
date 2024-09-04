@@ -2,7 +2,7 @@
 using Unity.Entities;
 using Unity.Mathematics;
 
-namespace Runtime
+namespace Runtime.ZoneGraphData
 {
     public struct ZoneGraphStorage//todo make dynamic buffer version, then the storage can be entity with various component buffers
     {

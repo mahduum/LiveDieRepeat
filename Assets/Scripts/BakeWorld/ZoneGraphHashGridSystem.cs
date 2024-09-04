@@ -1,5 +1,5 @@
 ﻿using DataUtilities;
-using Runtime;
+using Runtime.ZoneGraphData;
 using Unity.Entities;
 using UnityEngine;
 

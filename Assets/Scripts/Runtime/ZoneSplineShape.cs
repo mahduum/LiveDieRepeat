@@ -6,10 +6,10 @@ using Unity.Mathematics;
 using UnityEditor.Splines;
 using UnityEngine;
 using UnityEngine.Splines;
+using Runtime.ZoneGraphData;
 
 namespace Runtime
 {
-    
     [ExecuteAlways]
     public class ZoneSplineShape : ZoneShape
     {
