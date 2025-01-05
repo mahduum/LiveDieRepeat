@@ -2,7 +2,7 @@
 using Unity.Entities;
 using Unity.Mathematics;
 
-namespace Runtime.ZoneGraphData
+namespace Runtime.ZoneGraphData//note: move to zonedata.cs?
 {
     public struct ZoneGraphStorage//todo make dynamic buffer version, then the storage can be entity with various component buffers
     {
@@ -18,14 +18,8 @@ namespace Runtime.ZoneGraphData
         /*All zones combined bounds*/
         public MinMaxAABB Bounds;
         //ZoneGraphBVTree ZoneBVTree; todo
-        //public ZoneGraphDataHandle DataHandle;//for lookup by zone graph subsytem
+        public ZoneGraphDataHandle DataHandle;//for lookup by zone graph subsytem
     }
 
-    public struct ZoneGraphDataHandle
-    {
-        public uint Index;
-        public uint Generation;
-    }
-    
     //todo make a blob of zonegraphstorage? entity that moves may have pointer to a lane
 }

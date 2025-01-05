@@ -1584,7 +1584,7 @@ MonoBehaviour:
   _pointsSpacing: 0.02
   _laneProfileProvider: {fileID: 7548983451920337754}
   _splineComputer: {fileID: 3651312659194238267}
-  _segmentPrefab: {fileID: 0}
+  _segmentPrefab: {fileID: 7068432207554409361}
 --- !u!114 &8627428416035117742
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -122,11 +122,63 @@ namespace Runtime.ZoneGraphData
         public int ConnectorIndex;
     }
     
+    /*For building lanes between points like:
+     BuildLanesBetweenPoints(const FConnectionEntry& Source, TConstArrayView<FConnectionEntry> Destinations,
+									const EZoneShapePolygonRoutingType RoutingType, const FZoneGraphTagMask ZoneTags, const FZoneGraphBuildSettings& BuildSettings, const FMatrix& LocalToWorld,
+									FZoneGraphStorage& OutZoneStorage, TArray<FZoneShapeLaneInternalLink>& OutInternalLinks)
+	*/
+    [Flags]
+    public enum ZoneShapeLaneConnectionRestrictions
+    {
+        None = 0,
+        NoLeftTurn = 1 << 0,                   // No left turning destinations allowed
+        NoRightTurn = 1 << 1,                  // No right turning destinations allowed
+        OneLanePerDestination = 1 << 2,        // Connect to only one nearest lane per destination
+        MergeLanesToOneDestinationLane = 1 << 3 // Connect all incoming lanes to one destination lane
+    }
+    
+    /*For manipulating shapes, may be not needed*/
+    public enum ZoneShapePointType
+    {
+        Sharp,         // Sharp corner
+        Bezier,        // Round corner, defined by manual bezier handles
+        AutoBezier,    // Round corner, defined by automatic bezier handles
+        LaneProfile    // Lane profile corner, length is defined by lane profile
+    }
     
     /*what shape entity needs:
      1. Points.
      2. Bounds.
      3. Lanes.
      */
-    
+
+    /*Used for querying the next location, for example the nearest location on a lane
+     from the nearest lane `FindNearestLane(QueryBounds, NavigationParams.LaneFilter, NearestLane, NearestLaneDistSqr)`
+     the data is passed on to the LaneLocationFragment*/
+    public struct ZoneGraphLaneLocation
+    {
+        public float3 Position;
+        public float3 Direction;
+        public float3 Tangent;
+        public float3 Up;
+        public ZoneGraphLaneHandle LaneHandle;
+        public int LaneSegment;
+        public float DistanceAlongLane;
+
+        public void Reset()
+        {
+            Position = float3.zero;
+            Direction = math.forward();
+            Tangent = math.forward();
+            Up = math.up();
+            LaneHandle.Reset();
+            LaneSegment = 0;
+            DistanceAlongLane = 0.0f;
+        }
+        
+        public bool IsValid()
+        {
+            return LaneHandle.IsValid();
+        }
+    }
 }

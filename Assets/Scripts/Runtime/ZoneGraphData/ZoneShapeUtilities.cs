@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using Authoring;
 using Data;
@@ -8,7 +7,6 @@ using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
 using Unity.Mathematics;
-using Unity.VisualScripting;
 using UnityEngine;
 
 namespace Runtime.ZoneGraphData

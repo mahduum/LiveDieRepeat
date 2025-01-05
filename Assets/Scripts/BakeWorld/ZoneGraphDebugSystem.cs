@@ -23,6 +23,7 @@ namespace BakeWorld
         [BurstCompile]
         public void OnUpdate(ref SystemState state)
         {
+            //todo: how often to update? this will run only on editor updates, what if I need it constantly? how are beziers made in splines example?
             var deltaTime = SystemAPI.Time.DeltaTime;
             //just for the main spline debug:
             foreach (var buffer in SystemAPI.Query<DynamicBuffer<ZoneShapePoint>>().WithAll<RegisteredShapeComponent, LaneProfileComponent>())
@@ -94,9 +95,10 @@ namespace BakeWorld
                     }
                     
                     Debug.Log($"Lane index ({i}) links to destination lane: ({linkData.DestinationLaneIndex}), link type: ({(int)linkData.Type})");
+                    //todo draw/connect intersections for lanes of the same type from different containers (are these links but I forgot this?)
                 }
                 
-                //todo get logic to finding next portion of data
+                //todo get logic for finding next portion of data
             }
 
             ref var boundaryPoints = ref zoneGraphData.Storage.Value.BoundaryPoints;
@@ -109,7 +111,7 @@ namespace BakeWorld
                 Debug.DrawLine(previous, current, Color.cyan, 10);//todo there is only internal boundary
             }
             
-            //close bounds
+            //close bounds, for now it will not connect all ends but only last and first boundary point for each container.
             var start = boundaryPoints[0];
             var end = boundaryPoints[boundaryPointsLength - 1];
             Debug.DrawLine(start, end, Color.cyan, 10);
