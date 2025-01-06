@@ -57,8 +57,8 @@ namespace Runtime.ZoneGraphData
     
     public struct ZoneGraphLaneHandle : IEquatable<ZoneGraphLaneHandle>
     {
-        public int Index { get; private set; }
-        public ZoneGraphDataHandle DataHandle { get; private set; }
+        public int Index { get; set; }
+        public ZoneGraphDataHandle DataHandle { get; set; }
         
         public ZoneGraphLaneHandle(int index, ZoneGraphDataHandle dataHandle)
         {

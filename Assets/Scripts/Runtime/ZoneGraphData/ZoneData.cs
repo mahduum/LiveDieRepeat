@@ -31,6 +31,7 @@ namespace Runtime.ZoneGraphData
         public int ZoneIndex;
 
         //tags
+        public ZoneGraphTagMask Tags;
     }
     
     [Flags]
@@ -60,6 +61,11 @@ namespace Runtime.ZoneGraphData
         public int DestinationLaneIndex;
         public ZoneLaneLinkType Type;
         public ZoneLaneLinkFlags Flags;
+        
+        public readonly bool HasFlags(ZoneLaneLinkFlags flags)
+        {
+            return (Flags & flags) != 0;
+        }
     }
 
     /* Link for a specified lane, used during building */
@@ -71,11 +77,23 @@ namespace Runtime.ZoneGraphData
         public ZoneLaneLinkData LinkData;
     }
 
-    public class ZoneShapeLaneInternalLinkComparer : IComparer<ZoneShapeLaneInternalLink>
+    public struct ZoneShapeLaneInternalLinkComparer : IComparer<ZoneShapeLaneInternalLink>
     {
         public int Compare(ZoneShapeLaneInternalLink x, ZoneShapeLaneInternalLink y)
         {
             return x.LaneIndex.CompareTo(y.LaneIndex);
+        }
+    }
+
+    public struct ZoneGraphLinkedLane
+    {
+        public ZoneGraphLaneHandle DestinationLaneHandle;
+        public ZoneLaneLinkType Type;
+        public ZoneLaneLinkFlags Flags;
+        
+        public readonly bool HasFlags(ZoneLaneLinkFlags flags)
+        {
+            return (Flags & flags) != 0;
         }
     }
     
@@ -155,6 +173,14 @@ namespace Runtime.ZoneGraphData
     /*Used for querying the next location, for example the nearest location on a lane
      from the nearest lane `FindNearestLane(QueryBounds, NavigationParams.LaneFilter, NearestLane, NearestLaneDistSqr)`
      the data is passed on to the LaneLocationFragment*/
+    /*todo how is it filled with data?
+     - `AdvanceLaneLocationInternal` from lane progressions in storage, that moves lane location along a lane
+     from ZoneGraphData actor, there is one structure per lane and it has dist updated.
+     we put in the advance distance and interpolate the existing progressions.
+     - `CalculateLocationAlongLane` for debug
+     - `FindNearestLocationOnLane` for follow path system `UMassZoneGraphPathFollowProcessor`
+     with chunk filter `FMassSimulationVariableTickChunkFragment::ShouldTickChunkThisFrame`
+     it writes data to it when we are finished with short or cached path.*/
     public struct ZoneGraphLaneLocation
     {
         public float3 Position;
