@@ -261,7 +261,7 @@ namespace Runtime.ZoneGraphNavigationData
         public byte bIsLaneExtrema;
     }
     
-    public struct MassZoneGraphShortPathFragment : IComponentData
+    public struct ZoneGraphShortPath : IComponentData
     {
         public const int MaxPoints = 3;
     

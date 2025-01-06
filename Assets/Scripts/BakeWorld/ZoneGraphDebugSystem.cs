@@ -17,7 +17,7 @@ namespace BakeWorld
         public void OnCreate(ref SystemState state)
         {
             //state.RequireForUpdate<LaneProfileComponent>();
-            state.RequireForUpdate<ZoneGraphData>();
+            state.RequireForUpdate<ZoneGraphDataSource>();
         }
 
         [BurstCompile]
@@ -40,7 +40,7 @@ namespace BakeWorld
             //todo configure lane profile, on bake retrieve the data
             //on bake should read the interface
             //for all lanes:
-            var zoneGraphData = SystemAPI.GetSingleton<ZoneGraphData>();
+            var zoneGraphData = SystemAPI.GetSingleton<ZoneGraphDataSource>();
             var allLanePointsLength = zoneGraphData.Storage.Value.LanePoints.Length;
             Debug.Log($"All lane points count: {allLanePointsLength}");
 

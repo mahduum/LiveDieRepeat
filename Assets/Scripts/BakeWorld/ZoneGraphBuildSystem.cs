@@ -19,7 +19,7 @@ namespace BakeWorld
         public void OnCreate(ref SystemState state)
         {
             state.RequireForUpdate<LaneProfileComponent>();
-            state.RequireForUpdate<ZoneGraphData>();
+            state.RequireForUpdate<ZoneGraphDataSource>();
             //example of changed version:
             //m_ImageGeneratorEntitiesQuery.SetChangedVersionFilter(ComponentType.ReadOnly<ImageGeneratorEntity>());
             //to rerun system only on changed entities, todo unfortunately in current state we can't modify just a part of the graph
@@ -134,7 +134,7 @@ namespace BakeWorld
             //_storageBlobAssetReference.Dispose();
             _storageBlobAssetReference = blobBuilder.CreateBlobAssetReference<ZoneGraphStorage>(Allocator.Persistent);
             
-            var zoneGraphData = SystemAPI.GetSingletonRW<ZoneGraphData>();
+            var zoneGraphData = SystemAPI.GetSingletonRW<ZoneGraphDataSource>();
             zoneGraphData.ValueRW.Storage = _storageBlobAssetReference;
             
             Debug.Log($"Registered boundary points storage: ({storage.BoundaryPoints.Length}), boundary points asset ref: ({_storageBlobAssetReference.Value.BoundaryPoints.Length}), total lane points: ({storage.LanePoints.Length})");

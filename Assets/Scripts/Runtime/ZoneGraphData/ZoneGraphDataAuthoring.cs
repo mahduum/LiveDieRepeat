@@ -22,12 +22,12 @@ namespace Runtime.ZoneGraphData
             public override void Bake(ZoneGraphDataAuthoring authoring)
             {
                 var entity = GetEntity(TransformUsageFlags.None);
-                AddComponent(entity, new ZoneGraphData());
+                AddComponent(entity, new ZoneGraphDataSource());
             }
         }
     }
 
-    public struct ZoneGraphData : IComponentData
+    public struct ZoneGraphDataSource : IComponentData
     {
         public BlobAssetReference<ZoneGraphStorage> Storage;
     }
