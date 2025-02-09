@@ -1,4 +1,5 @@
 ﻿using System;
+using Runtime.ZoneGraphData;
 using Unity.Entities;
 using UnityEngine;
 using UnityEngine.Serialization;
@@ -65,26 +66,19 @@ namespace Data
         //there is option edit tags, all, none, and available tags to choose from, use unity layer mask for that - todo how to do it?
         //the tag gets its bit from a number, that is why all the tags are defined in tags settings file because it is index of that tag info
         //tags are initialized to max int number
-        
-        /*
-         * visual tag representation:
-         * 
-USTRUCT()
-struct ZONEGRAPH_API FZoneGraphTagInfo
-{
-	GENERATED_BODY()
 
-	bool IsValid() const { return !Name.IsNone(); }
+        public ZoneGraphTagMask _tags;
 
-	UPROPERTY(Category = Zone, EditAnywhere)
-	FName Name;
+        public static bool operator ==(ZoneLaneDesc laneDescLeft, ZoneLaneDesc laneDescRight)
+        {
+            return laneDescLeft._direction == laneDescRight._direction &&
+                   Mathf.Approximately(laneDescLeft._width, laneDescRight._width) &&
+                   laneDescLeft._tags == laneDescRight._tags;
+        }
 
-	UPROPERTY(Category = Zone, EditAnywhere)
-	FColor Color = FColor(ForceInit);
-
-	UPROPERTY(Category = Zone, EditAnywhere)
-	FZoneGraphTag Tag;
-};
-         */
+        public static bool operator !=(ZoneLaneDesc laneDescLeft, ZoneLaneDesc laneDescRight)
+        {
+            return !(laneDescLeft == laneDescRight);
+        }
     }
 }
