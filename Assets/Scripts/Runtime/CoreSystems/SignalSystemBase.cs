@@ -197,14 +197,15 @@ then signalTypeQueryPair.Value.GetSingletonBuffer<EntitySignalRange>().AsParalle
                 var signalEntities = new NativeArray<Entity>(signalsCount, Allocator.Temp);
                 var signalRanges = new NativeArray<EntitySignalRange>(signalRangesCount, Allocator.Temp);
                 
-                using var chunks = signalTypeQueryPair.Value.ToArchetypeChunkArray(Allocator.Temp);
+                using var chunks = signalTypeQueryPair.Value.ToArchetypeChunkArray(Allocator.Temp);//system entities that accidentally send same signal maybe of different archetypes, because Entity A might use simply more buffers than Entity B
+                                                                                                                                //however the buffers will preserve consistent read within these archetypes.
                 ComponentType signalType = ComponentType.FromTypeIndex(signalTypeQueryPair.Key);
                 DynamicComponentTypeHandle signalTypeHandle = GetDynamicComponentTypeHandle(signalType);
 
                 var signalsBegin = 0;
                 var rangesChunksBegin = 0;
 
-                //each run within higher loop is for system that has buffer and sent signals
+                //TODO: to make buffers smaller create them per signal archetype?
                 foreach (var chunk in chunks)
                 {
                     unsafe

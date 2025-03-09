@@ -24,6 +24,8 @@ namespace Runtime.ZoneGraphNavigationSystems
             state.RequireForUpdate<ZoneGraphLaneLocationFragment>();
             state.RequireForUpdate<MoveTarget>();
             state.RequireForUpdate<ZoneGraphDataSource>();
+            
+            //todo add buffer
         }
 
         [BurstCompile]
@@ -31,6 +33,8 @@ namespace Runtime.ZoneGraphNavigationSystems
         {
             //This will get the individual buffer for this system entity, if we want this system to be able to send signals this way, it must have this buffer on it.
             var signalEntities = new NativeList<CurrentLaneChangedSignal>(state.WorldUpdateAllocator);
+            
+            //TODO create buffer entity just for this system for each signal type that will have <SignalTypeComponent, AllComponentsFromGivenQuery, UniqueSystemComponent>???
             
             foreach (var entity in SystemAPI.Query<RefRO<ZoneGraphLaneLocationFragment>>().WithEntityAccess())
             {
