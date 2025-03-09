@@ -2,6 +2,7 @@
 using Runtime.ZoneGraphNavigationData;
 using Runtime.ZoneGraphData;
 using Unity.Burst;
+using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
 using Unity.Transforms;
@@ -28,14 +29,22 @@ namespace Runtime.ZoneGraphNavigationSystems
         [BurstCompile]
         public void OnUpdate(ref SystemState state)
         {
-            var buffer = state.EntityManager.GetBuffer<CurrentLaneChangedSignal>(state.SystemHandle);
+            //This will get the individual buffer for this system entity, if we want this system to be able to send signals this way, it must have this buffer on it.
+            var signalEntities = new NativeList<CurrentLaneChangedSignal>(state.WorldUpdateAllocator);
+            
             foreach (var entity in SystemAPI.Query<RefRO<ZoneGraphLaneLocationFragment>>().WithEntityAccess())
             {
                 //entities signaled with given signal are expected to have components adequate to this signal actions, for example lane chaged signal will expect signaled entity to have ZoneLaneLocationFragment etc.
-                buffer.Add(
+                //generally if something than signal:
+                signalEntities.Add(
                     new CurrentLaneChangedSignal() { SignaledEntity = entity.Item2 }
                 );
             }
+            //acclaiming first archetype will commit given archetype range, if we use ToArchetypeChunks, then there is no need to keep trace of archetype ranges:
+            SignalSystemBase.SignalEntities(ref state, signalEntities);
+            
+            //todo there may be same signal for another archetype here:
+            //... (can a method detect whether to add another range)?
         }
 
         [BurstCompile]

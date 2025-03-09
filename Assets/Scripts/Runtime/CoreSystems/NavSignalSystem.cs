@@ -4,17 +4,29 @@ using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
 using Unity.Mathematics;
+using UnityEngine;
 using FieldInfo = System.Reflection.FieldInfo;
 
 namespace Runtime.CoreSystems
 {
-    public partial class NavSignalSystem : SignalSystemBase
+    public partial class NavSignalSystem : OneSignalSystem<CurrentLaneChangedSignal>//for various additional TSignals make generic
     {
+        /*
+         * Two possible solutions:
+         * - Each signal sender has its own buffer and clears it upon adding new signals.
+         * - Signal receiver has its own one buffer to which other systems are adding, however for this to work it would need to have a method for it and swap/block additions.
+         * - Both buffers must contain ranges and entities. For swapping it there would need to be two interchangeable entities each with its own pair of buffers per signal system.
+         * - Both buffers are cleared after having been processed.
+         * - There could be a "subsytem" one for all entity, that would contain all the signals and respective "OnSignalReceived" delegates? And OnCreate each system would subscribe,
+         *      but this might be unncecessary, system can query signals directly?
+         */
+
         protected override void OnCreate()
         {
+            base.OnCreate();
+            //todo: this is deprecated, now signal senders with create their buffers:
             //Entity entity = EntityManager.CreateEntity();
             var systemEntities = EntityManager.UniversalQueryWithSystems;
-
             Type systemHandleType = typeof(SystemHandle);
 
             // Get the FieldInfo for the internal m_Entity field
@@ -78,11 +90,12 @@ namespace Runtime.CoreSystems
             buffer2.Add(new EntitySignalRange());
             buffer2.Add(new EntitySignalRange());
 
-            SignalQuery = SystemAPI.QueryBuilder()
+            var signalQuery = SystemAPI.QueryBuilder()
                 .WithAll<EntitySignalRange, CurrentLaneChangedSignal>().Build();
         }
 
-        protected override NativeHashMap<TypeIndex, NativeArray<Entity>> GetSignalEntityMap()
+        //DEPRECATED
+        protected NativeHashMap<TypeIndex, NativeArray<Entity>> GetSignalEntityMap()
         {
             //to be generic, derived class can return range with entities, range has signal typeindex
             //if there is a systemBase SignalSystemBase<TSignal> where TSignal : IBufferElementData, and we can have many signals: SignalSystemBase<T1, T2, ...>
@@ -135,11 +148,9 @@ namespace Runtime.CoreSystems
             return new NativeHashMap<TypeIndex, NativeArray<Entity>>(0, Allocator.Temp);
         }
 
-        protected override EntityQuery SignalQuery { get; set; }
-
         protected override void SignalEntities(NativeArray<Entity> entities, TypeIndex signalType)
         {
-            throw new System.NotImplementedException();
+            Debug.Log($"Signalling entities in count {entities.Length}, for signal type {TypeManager.GetType(signalType)}");
         }
     }
 }
