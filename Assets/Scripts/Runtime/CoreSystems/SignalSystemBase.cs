@@ -143,9 +143,8 @@ then signalTypeQueryPair.Value.GetSingletonBuffer<EntitySignalRange>().AsParalle
         {
             /*TODO only one archetype can exist in a buffer.
             */
-                
-            var signaledEntitiesCount = 0;
-            var rangesCount = 0;
+            var allSignaledEntitiesCount = 0;
+            var allRangesCount = 0;
             var signaledEntitiesCountBySignal =
                 new NativeHashMap<TypeIndex, SignalData>(GetEntitySignalQueries().Count, Allocator.Temp);//query will have both buffers in order
 
@@ -153,6 +152,9 @@ then signalTypeQueryPair.Value.GetSingletonBuffer<EntitySignalRange>().AsParalle
             foreach (var signalTypeQueryPair in
                      GetEntitySignalQueries()) //each query is per signal so there is no overlap, signal buffer may have a tag "Signal", but each buffer is from different sender
             {
+                //each query can contain different archetypes of entities inside the buffer, but we are collecting chunks of buffers themselves,
+                //there may be more than single buffer archetype, but they all respond to the same signal, each signaled entity buffer index should be paired with each range entity buffer index
+                //what we need to be sorting are the archetypes of the entities inside the signal!
                 using var
                     chunks = signalTypeQueryPair.Value
                         .ToArchetypeChunkArray(Allocator
@@ -161,29 +163,36 @@ then signalTypeQueryPair.Value.GetSingletonBuffer<EntitySignalRange>().AsParalle
                     ComponentType.FromTypeIndex(signalTypeQueryPair
                         .Key); //query contains buffers of elements of given type, what if there should be entities in query queried for double buffers, for singals and ranges?
                 var signalTypeHandle = GetDynamicComponentTypeHandle(signalType);
-                var prevSignalEntitiesCount = signaledEntitiesCount;
-                var prevRangesCount = rangesCount;
+                var prevSignalEntitiesCount = allSignaledEntitiesCount;
+                var prevRangesCount = allRangesCount;
 
                 foreach (var chunk in chunks)//these are chunks of dynamic buffers
                 {
-                    UnsafeUntypedBufferAccessor buffer = chunk.GetUntypedBufferAccessor(ref signalTypeHandle);//in each buffer there will be exactly one of any archetype contiguously, two different buffers can have repeating archetype, there is more archetypes than signals
-                    signaledEntitiesCount += buffer.Length;//counting all entities in that dyn buffer
+                    //get buffer accessor for entities from the query
+                    //in each buffer there will be exactly one of any archetype contiguously, two different buffers can have repeating archetype, there is more archetypes than signals
+                    UnsafeUntypedBufferAccessor buffer = chunk.GetUntypedBufferAccessor(ref signalTypeHandle);
+                    //counting all entities in that dyn buffer
+                    allSignaledEntitiesCount += buffer.Length;
 
+                    //get buffer accessor for ranges
                     var rangesHandle = GetBufferTypeHandle<EntitySignalRange>();
                     var rangesBuffer = chunk.GetBufferAccessor(ref rangesHandle);
-                    
-                    rangesCount += rangesBuffer.Length;
+                    //count ranges
+                    allRangesCount += rangesBuffer.Length;
                 }
 
                 //add count for each type index separately //todo this might fail later, because the order of archetypes after ToArchetypeChunkArray is not guaranteed to remain the same.
                 signaledEntitiesCountBySignal.Add(signalTypeQueryPair.Key,
                     new SignalData()
                     {
-                        EntityCount = signaledEntitiesCount - prevSignalEntitiesCount,
-                        RangeCount = rangesCount - prevRangesCount,
+                        EntityCount = allSignaledEntitiesCount - prevSignalEntitiesCount,
+                        RangeCount = allRangesCount - prevRangesCount,
                     });
             }
 
+            //deprecated way of adding by archetype
+            var signalArchetypesMap =
+                new NativeParallelMultiHashMap<EntityArchetype, Entity>(allSignaledEntitiesCount, Allocator.Temp);
             /*
              * Each signal type series in a buffer was added as the same archetype, for each series of elements in that buffer an Entity range was added to mark the series of one archetype
              */
@@ -192,8 +201,6 @@ then signalTypeQueryPair.Value.GetSingletonBuffer<EntitySignalRange>().AsParalle
             {
                 var signalsCount = signaledEntitiesCountBySignal[signalTypeQueryPair.Key].EntityCount;
                 var signalRangesCount = signaledEntitiesCountBySignal[signalTypeQueryPair.Key].RangeCount;
-                var signalArchetypesMap =
-                    new NativeParallelMultiHashMap<EntityArchetype, Entity>(signaledEntitiesCount, Allocator.Temp);
                 var signalEntities = new NativeArray<Entity>(signalsCount, Allocator.Temp);
                 var signalRanges = new NativeArray<EntitySignalRange>(signalRangesCount, Allocator.Temp);
                 
@@ -236,57 +243,103 @@ then signalTypeQueryPair.Value.GetSingletonBuffer<EntitySignalRange>().AsParalle
                         }
                     }
                 }
-
-                var rangesBegin = 0;
-                var signalBuffersEntities = signalTypeQueryPair.Value.ToEntityArray(Allocator.Temp);
-
-                //todo make another version of base since we have already called on chunks array, we could've sorted it there into different archetypes
-                foreach (var entity in signalBuffersEntities)
+                
+                //get same archetype for given signal under the same key
+                var signalArchetypeSlicesMap =
+                    new NativeParallelMultiHashMap<EntityArchetype, NativeSlice<Entity>>(signalRanges.Length, Allocator.Temp);
+                
+                //from buffers of entities and ranges, iterate all ranges (we know that we are still within same signal here):
+                // ReSharper disable once ForCanBeConvertedToForeach
+                for (var index = 0; index < signalRanges.Length; index++)
                 {
-                    //there is buffer for each signal, but each one is from different signal sender, but we are still in the same query, so the order is preserved. 
-                    var rangesBuffer = EntityManager.GetBuffer<EntitySignalRange>(entity)
-                        .ToNativeArray(Allocator
-                            .Temp); //this one will work only for first part of array, last value is the offset
-                    for (int i = 0; i < rangesBuffer.Length; i++)
-                    {
-                        var range = rangesBuffer[i];
-                        var begin = rangesBegin + range.Begin;
-                        var end = rangesBegin + range.End;
-                        var archetype = GetEntityStorageInfoLookup()[signalEntities[range.Begin]].Chunk.Archetype;
+                    var range = signalRanges[index];
+                    var sameArchetypeSignals = signalEntities.Slice(range.Begin, range.End - range.Begin);
+                    var archetype = GetEntityStorageInfoLookup()[signalEntities[range.Begin]].Chunk.Archetype;
+                    signalArchetypeSlicesMap.Add(archetype, sameArchetypeSignals);
+                    range.IsProcessed = true;
+                    signalRanges[index] = range;
+                }
+                
+                var archetypes = signalArchetypeSlicesMap.GetKeyArray(Allocator.Temp);
+                
+                foreach (var archetype in archetypes)
+                {
+                    var slices = signalArchetypeSlicesMap.GetValuesForKey(archetype);
+                    var count = 0;
 
-                        while (begin != end)
+                    foreach (var slice in slices)
+                    {
+                        count += slice.Length;
+                    }
+                    
+                    slices.Reset();
+                    var signals = new NativeArray<Entity>(count, Allocator.Temp);
+                    var copiedCount = 0;
+                    var size = UnsafeUtility.SizeOf<Entity>();
+                    foreach (var slice in slices)
+                    {
+                        unsafe
                         {
-                            signalArchetypesMap.Add(archetype, signalEntities[begin]);
-                            begin++;
+                            UnsafeUtility.MemCpy((byte*)signals.GetUnsafePtr() + copiedCount * size, slice.GetUnsafePtr(), slice.Length * size);
                         }
-
-                        range.IsProcessed = true;
+                        copiedCount += slice.Length;
                     }
-
-                    rangesBegin += rangesBuffer[^1].End;
+                    
+                    //send signal for each archetype separately:
+                    SignalEntities(signals, signalTypeQueryPair.Key);
                 }
-
-                //signal by archetype collections, todo debug: check if we are still signaling the same types
-                foreach (var archetypeEntitiesPair in signalArchetypesMap)
-                {
-                    var archetypeCount = signalArchetypesMap.CountValuesForKey(archetypeEntitiesPair.Key);
-                    var signalEntitiesByArchetype = new NativeArray<Entity>(archetypeCount, Allocator.Temp);
-                    var valuesForKey = signalArchetypesMap.GetValuesForKey(archetypeEntitiesPair.Key);
-                    var index = 0;
-                    while (valuesForKey.MoveNext())
-                    {
-                        signalEntitiesByArchetype[index++] = valuesForKey.Current;
-                    }
-
-                    SignalEntities(signalEntitiesByArchetype, signalTypeQueryPair.Key);
-                    //TODO: mark ranges as used so another system (supposedly signal sender) will know to clear the buffers
-                    //TODO: for sending signals, may use an entity with the buffer, and when it gets the array of entities to signal with the signal, it creates the range element by itself
-                    //this way system that sends the signal does not need to have its own buffers... but then how we sync adding to same one buffer? we may loose the ranges, because we dont know the order and we fill ranges based on current buffer size
-                    //TODO: do test code
-                }
-
-                //clear all!!!
-                signalArchetypesMap.Clear();
+                // DEPRECATED (keeping for reference):
+                //
+                // var rangesBegin = 0;
+                // var signalBuffersEntities = signalTypeQueryPair.Value.ToEntityArray(Allocator.Temp);
+                //
+                // //todo make another version of base since we have already called on chunks array, we could've sorted it there into different archetypes
+                // foreach (var entity in signalBuffersEntities)
+                // {
+                //     //there is buffer for each signal, but each one is from different signal sender, but we are still in the same query, so the order is preserved. 
+                //     var rangesBuffer = EntityManager.GetBuffer<EntitySignalRange>(entity)
+                //         .ToNativeArray(Allocator
+                //             .Temp); //this one will work only for first part of array, last value is the offset
+                //     for (int i = 0; i < rangesBuffer.Length; i++)
+                //     {
+                //         var range = rangesBuffer[i];
+                //         var begin = rangesBegin + range.Begin;
+                //         var end = rangesBegin + range.End;
+                //         var archetype = GetEntityStorageInfoLookup()[signalEntities[range.Begin]].Chunk.Archetype;
+                //
+                //         while (begin != end)
+                //         {
+                //             signalArchetypesMap.Add(archetype, signalEntities[begin]);
+                //             begin++;
+                //         }
+                //
+                //         range.IsProcessed = true;
+                //     }
+                //
+                //     rangesBegin += rangesBuffer[^1].End;
+                // }
+                //
+                // //signal by archetype collections, todo debug: check if we are still signaling the same types
+                // foreach (var archetypeEntitiesPair in signalArchetypesMap)
+                // {
+                //     var archetypeCount = signalArchetypesMap.CountValuesForKey(archetypeEntitiesPair.Key);
+                //     var signalEntitiesByArchetype = new NativeArray<Entity>(archetypeCount, Allocator.Temp);
+                //     var valuesForKey = signalArchetypesMap.GetValuesForKey(archetypeEntitiesPair.Key);
+                //     var index = 0;
+                //     while (valuesForKey.MoveNext())
+                //     {
+                //         signalEntitiesByArchetype[index++] = valuesForKey.Current;
+                //     }
+                //
+                //     SignalEntities(signalEntitiesByArchetype, signalTypeQueryPair.Key);
+                //     //TODO: mark ranges as used so another system (supposedly signal sender) will know to clear the buffers
+                //     //TODO: for sending signals, may use an entity with the buffer, and when it gets the array of entities to signal with the signal, it creates the range element by itself
+                //     //this way system that sends the signal does not need to have its own buffers... but then how we sync adding to same one buffer? we may loose the ranges, because we dont know the order and we fill ranges based on current buffer size
+                //     //TODO: do test code
+                // }
+                //
+                // //clear all!!!
+                // signalArchetypesMap.Clear();
             }
         }
         
@@ -324,7 +377,6 @@ then signalTypeQueryPair.Value.GetSingletonBuffer<EntitySignalRange>().AsParalle
                         
                         NativeArray<Entity> array = NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<Entity>(buffer.GetUnsafePtr(0),
                             buffer.Length, WorldUpdateAllocator);
-                        array.toar
                     }
                 }
                 
